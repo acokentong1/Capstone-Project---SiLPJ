@@ -10,11 +10,14 @@ use App\Models\SchoolProfile;
 use App\Models\User;
 use App\Observers\ActivityObserver;
 use App\Support\ActivityLogger;
+use App\Services\LpjAttentionService;
 use Carbon\Carbon;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -27,6 +30,16 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Carbon::setLocale('id');
+
+        View::composer('partials.app-navigation', function ($view): void {
+            $count = 0;
+
+            if (Auth::check()) {
+                $count = app(LpjAttentionService::class)->notificationCount((int) Auth::id());
+            }
+
+            $view->with('navAttentionCount', $count);
+        });
 
         Belanja::observe(ActivityObserver::class);
         NotaPesanan::observe(ActivityObserver::class);

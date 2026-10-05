@@ -576,6 +576,9 @@
 
             <div class="quick-actions">
                 <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                @if(($attentionSummary['total'] ?? 0) > 0)
+                    <a href="{{ route('attention.index') }}" class="btn btn-secondary">Perlu Perhatian ({{ $attentionSummary['total'] }})</a>
+                @endif
                 <a href="{{ route('laporan-lpj.index') }}" class="btn btn-secondary">Lihat Laporan LPJ</a>
             </div>
         </section>
@@ -587,6 +590,22 @@
                     Lengkapi data sekolah agar Nota Pesanan, Kwitansi, dan BAPB dapat dibuat dengan identitas yang benar.
                 </div>
                 <a href="{{ route('school-profile.create') }}">Lengkapi sekarang →</a>
+            </div>
+        @endif
+
+        @if (($attentionSummary['total'] ?? 0) > 0)
+            <div class="alert" role="status">
+                <div>
+                    <strong>{{ $attentionSummary['total'] }} transaksi masih memerlukan dokumen LPJ.</strong>
+                    @if(($attentionSummary['age_14_plus'] ?? 0) > 0)
+                        {{ $attentionSummary['age_14_plus'] }} transaksi sudah berumur 14 hari atau lebih dan menjadi prioritas internal tertinggi.
+                    @elseif(($attentionSummary['age_7_plus'] ?? 0) > 0)
+                        {{ $attentionSummary['age_7_plus'] }} transaksi sudah berumur 7 hari atau lebih dan sebaiknya ditinjau.
+                    @else
+                        Selesaikan dokumen secara bertahap melalui Pusat Perhatian LPJ.
+                    @endif
+                </div>
+                <a href="{{ route('attention.index') }}">Buka pusat perhatian →</a>
             </div>
         @endif
 
@@ -782,6 +801,12 @@
                 <div class="icon">📊</div>
                 <h3>Laporan LPJ</h3>
                 <p>Rekap transaksi dan periksa kelengkapan seluruh dokumen LPJ.</p>
+            </a>
+
+            <a href="{{ route('attention.index') }}" class="menu-card">
+                <div class="icon">🔔</div>
+                <h3>Perlu Perhatian</h3>
+                <p>Prioritaskan transaksi yang masih kekurangan Nota Pesanan, Kwitansi, atau BAPB.</p>
             </a>
         </section>
     </main>

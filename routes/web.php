@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\AttentionController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\MonitoringController;
@@ -65,6 +66,9 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     Route::get('/activity-logs', [ActivityLogController::class, 'index'])
         ->name('activity-logs.index');
+
+    Route::get('/perhatian', [AttentionController::class, 'index'])
+        ->name('attention.index');
 
     Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
         Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');

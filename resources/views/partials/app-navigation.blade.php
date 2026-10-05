@@ -130,7 +130,41 @@
         cursor: pointer;
         transition: .16s ease;
     }
-    .silpj-nav-icon-link:hover { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+    .silpj-nav-icon-link { position: relative; }
+    .silpj-nav-alert-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #fff;
+        border-radius: 999px;
+        background: #dc2626;
+        color: #fff;
+        font-size: 9px;
+        font-weight: 900;
+        line-height: 1;
+    }
+    .silpj-nav-mobile-count {
+        margin-left: auto;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #fee2e2;
+        color: #b91c1c;
+        font-size: 10px;
+        font-weight: 900;
+    }
+    .silpj-nav-icon-link:hover,
+    .silpj-nav-icon-link.active { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
     .silpj-nav-logout:hover { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
     .silpj-nav-icon-link svg,
     .silpj-nav-logout svg { width: 17px; height: 17px; }
@@ -253,6 +287,14 @@
                 <strong>{{ $navUser?->name }}</strong>
                 <span>{{ $navSchool?->nama_sekolah ?? 'Profil sekolah belum lengkap' }}@if($navUser?->isAdmin()) · Admin @endif</span>
             </div>
+            <a href="{{ route('attention.index') }}" class="silpj-nav-icon-link {{ request()->routeIs('attention.*') ? 'active' : '' }}" title="Perlu Perhatian{{ ($navAttentionCount ?? 0) > 0 ? ': '.$navAttentionCount.' LPJ belum lengkap' : '' }}" aria-label="Pusat Perhatian LPJ">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>
+                </svg>
+                @if(($navAttentionCount ?? 0) > 0)
+                    <span class="silpj-nav-alert-badge">{{ $navAttentionCount > 99 ? '99+' : $navAttentionCount }}</span>
+                @endif
+            </a>
             <a href="{{ route('school-profile.index') }}" class="silpj-nav-icon-link" title="Profil Sekolah" aria-label="Profil Sekolah">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6M8 11h.01M12 11h.01M16 11h.01"/>
@@ -291,6 +333,7 @@
                     <a href="{{ route('kwitansi.index') }}" class="silpj-nav-link {{ request()->routeIs('kwitansi.*') ? 'active' : '' }}">Kwitansi</a>
                     <a href="{{ route('bapb.index') }}" class="silpj-nav-link {{ request()->routeIs('bapb.*') ? 'active' : '' }}">BAPB</a>
                     <a href="{{ route('laporan-lpj.index') }}" class="silpj-nav-link {{ request()->routeIs('laporan-lpj.*') ? 'active' : '' }}">Laporan LPJ</a>
+                    <a href="{{ route('attention.index') }}" class="silpj-nav-link {{ request()->routeIs('attention.*') ? 'active' : '' }}">Perlu Perhatian @if(($navAttentionCount ?? 0) > 0)<span class="silpj-nav-mobile-count">{{ $navAttentionCount }}</span>@endif</a>
                     <a href="{{ route('activity-logs.index') }}" class="silpj-nav-link {{ request()->routeIs('activity-logs.*') ? 'active' : '' }}">Aktivitas</a>
                     @if($navUser?->isAdmin())
                         <a href="{{ route('admin.dashboard') }}" class="silpj-nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Dashboard Admin</a>

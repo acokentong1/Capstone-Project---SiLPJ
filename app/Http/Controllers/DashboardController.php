@@ -7,10 +7,11 @@ use App\Models\Belanja;
 use App\Models\Kwitansi;
 use App\Models\NotaPesanan;
 use App\Models\SchoolProfile;
+use App\Services\LpjAttentionService;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(LpjAttentionService $attentionService)
     {
         $userId = auth()->id();
 
@@ -43,6 +44,8 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
+        $attentionSummary = $attentionService->summary((int) $userId);
+
         return view('dashboard', compact(
             'school',
             'jumlahTransaksi',
@@ -53,7 +56,8 @@ class DashboardController extends Controller
             'jumlahLengkap',
             'jumlahBelumLengkap',
             'persentaseLengkap',
-            'transaksiTerbaru'
+            'transaksiTerbaru',
+            'attentionSummary'
         ));
     }
 }
