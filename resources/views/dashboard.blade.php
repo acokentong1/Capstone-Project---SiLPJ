@@ -867,17 +867,57 @@ Belum ada Nota
 
 @endif
 
-                                                @if ($belanja->kwitansi)
-                                                    <a class="doc-chip doc-ready" href="{{ route('kwitansi.show', $belanja->kwitansi->id) }}">Kwitansi ✓</a>
-                                                @else
-                                                    <a class="doc-chip doc-missing" href="{{ route('kwitansi.create', $belanja->id) }}">+ Kwitansi</a>
-                                                @endif
+                                               @if ($belanja->kwitansi)
 
-                                                @if ($belanja->bapb)
-                                                    <a class="doc-chip doc-ready" href="{{ route('bapb.show', $belanja->bapb->id) }}">BAPB ✓</a>
-                                                @else
-                                                    <a class="doc-chip doc-missing" href="{{ route('bapb.create', $belanja->id) }}">+ BAPB</a>
-                                                @endif
+    <a class="doc-chip doc-ready" 
+       href="{{ route('kwitansi.show', $belanja->kwitansi->id) }}">
+        Kwitansi ✓
+    </a>
+
+@else
+
+    @if(auth()->user()->role != 'kepala_sekolah')
+
+        <a class="doc-chip doc-missing" 
+           href="{{ route('kwitansi.create', $belanja->id) }}">
+            + Kwitansi
+        </a>
+
+    @else
+
+        <span class="doc-chip doc-missing">
+            Belum ada Kwitansi
+        </span>
+
+    @endif
+
+@endif
+
+                                             @if ($belanja->bapb)
+
+    <a class="doc-chip doc-ready" 
+       href="{{ route('bapb.show', $belanja->bapb->id) }}">
+        BAPB ✓
+    </a>
+
+@else
+
+    @if(auth()->user()->role != 'kepala_sekolah')
+
+        <a class="doc-chip doc-missing" 
+           href="{{ route('bapb.create', $belanja->id) }}">
+            + BAPB
+        </a>
+
+    @else
+
+        <span class="doc-chip doc-missing">
+            Belum ada BAPB
+        </span>
+
+    @endif
+
+@endif
                                             </div>
                                         </td>
                                         <td>
