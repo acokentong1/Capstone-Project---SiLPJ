@@ -195,7 +195,18 @@
                             <option value="bapb" @selected($filters['dokumen_kurang'] === 'bapb')>BAPB</option>
                         </select>
                     </div>
-                    <div class="field">
+                    
+<div class="field">
+    <label for="tahun">Tahun Anggaran</label>
+    <select name="tahun" id="tahun">
+        <option value="">Semua Tahun</option>
+        @foreach(($tahunAnggaran ?? []) as $tahun)
+            <option value="{{ $tahun }}" @selected(($filters['tahun'] ?? '') == $tahun)>{{ $tahun }}</option>
+        @endforeach
+    </select>
+</div>
+
+<div class="field">
                         <label for="tanggal_mulai">Tanggal mulai</label>
                         <input id="tanggal_mulai" name="tanggal_mulai" type="date" value="{{ $filters['tanggal_mulai'] }}">
                     </div>

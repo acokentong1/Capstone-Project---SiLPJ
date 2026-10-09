@@ -54,8 +54,10 @@
 
     <div class="field">
         <label>Total Belanja</label>
-        <div class="total-preview" id="totalPreview">Rp 0</div>
-        <div class="field-help">Total dihitung otomatis oleh server dari jumlah × harga satuan.</div>
+        <div class="total-preview" id="totalPreview">
+            Rp 0
+        </div>
+        
     </div>
 </div>
 

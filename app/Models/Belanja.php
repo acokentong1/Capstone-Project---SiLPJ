@@ -1,14 +1,22 @@
 <?php
+// Tambahkan fillable school_profile_id pada model Belanja.
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Belanja extends Model
 {
+    use HasFactory;
+
+    protected $table = 'belanjas';
+
     protected $fillable = [
         'user_id',
+        'school_profile_id',
         'tanggal',
+        'tahun_anggaran',
         'nomor_bukti',
         'uraian',
         'kategori',
@@ -18,18 +26,19 @@ class Belanja extends Model
         'nota',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'jumlah' => 'integer',
-            'harga_satuan' => 'integer',
-            'total' => 'integer',
-        ];
-    }
-
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function schoolProfile()
+    {
+        return $this->belongsTo(SchoolProfile::class, 'school_profile_id');
+    }
+
+    public function notaPesanan()
+    {
+        return $this->hasOne(NotaPesanan::class);
     }
 
     public function kwitansi()
@@ -40,10 +49,5 @@ class Belanja extends Model
     public function bapb()
     {
         return $this->hasOne(Bapb::class);
-    }
-
-    public function notaPesanan()
-    {
-        return $this->hasOne(NotaPesanan::class);
     }
 }

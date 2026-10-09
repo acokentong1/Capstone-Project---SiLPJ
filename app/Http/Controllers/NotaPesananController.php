@@ -42,10 +42,10 @@ class NotaPesananController extends Controller
             ->withQueryString();
 
         $totalNota = NotaPesanan::where('user_id', auth()->id())->count();
-        $totalNilai = Belanja::where('user_id', auth()->id())
+        $totalNilai = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
             ->whereHas('notaPesanan')
             ->sum('total');
-        $notaLengkap = Belanja::where('user_id', auth()->id())
+        $notaLengkap = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
             ->whereHas('notaPesanan')
             ->whereHas('kwitansi')
             ->whereHas('bapb')
@@ -56,7 +56,7 @@ class NotaPesananController extends Controller
 
     public function create($id)
     {
-        $belanja = Belanja::where('user_id', auth()->id())
+        $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
             ->findOrFail($id);
 
         $notaAda = NotaPesanan::where('belanja_id', $belanja->id)
@@ -89,7 +89,7 @@ class NotaPesananController extends Controller
         return DB::transaction(function () use ($validated) {
             User::whereKey(auth()->id())->lockForUpdate()->firstOrFail();
 
-            $belanja = Belanja::where('user_id', auth()->id())
+            $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
 

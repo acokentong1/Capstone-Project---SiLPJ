@@ -61,7 +61,7 @@ class BapbController extends Controller
 
     public function create($id)
     {
-        $belanja = Belanja::where('user_id', auth()->id())
+        $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
             ->findOrFail($id);
 
         $bapbAda = Bapb::where('belanja_id', $belanja->id)
@@ -97,7 +97,7 @@ class BapbController extends Controller
         return DB::transaction(function () use ($validated) {
             User::whereKey(auth()->id())->lockForUpdate()->firstOrFail();
 
-            $belanja = Belanja::where('user_id', auth()->id())
+            $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
 

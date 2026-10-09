@@ -180,7 +180,7 @@
 
         .filter-grid {
             display: grid;
-            grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(135px, 0.8fr)) auto;
+            grid-template-columns: minmax(220px, 1.5fr) repeat(5, minmax(135px, 0.8fr)) auto;
             gap: 10px;
             align-items: end;
         }
@@ -473,7 +473,9 @@
             </div>
             <div class="actions">
                 <a href="{{ route('laporan-lpj.index') }}" class="btn btn-secondary">Laporan LPJ</a>
-                <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                @if(!in_array(auth()->user()->role, ['kepala_sekolah']))
+                        <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                    @endif
             </div>
         </div>
 
@@ -539,6 +541,18 @@
                         <option value="lengkap" @selected($filters['status'] === 'lengkap')>Lengkap</option>
                         <option value="proses" @selected($filters['status'] === 'proses')>Dalam proses</option>
                         <option value="belum" @selected($filters['status'] === 'belum')>Belum ada dokumen</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="tahun">Tahun Anggaran</label>
+                    <select id="tahun" name="tahun">
+                        <option value="">Semua Tahun</option>
+                        @foreach($tahunAnggaran ?? [] as $tahun)
+                            <option value="{{ $tahun }}" @selected(($filters['tahun'] ?? '') == $tahun)>
+                                {{ $tahun }}
+                            </option>
+                        @endforeach
                     </select>
                 </div>
 
@@ -676,7 +690,9 @@
                                     </div>
                                     @if(!$hasFilters)
                                         <div style="margin-top:14px;">
-                                            <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                                            @if(!in_array(auth()->user()->role, ['kepala_sekolah']))
+                        <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                    @endif
                                         </div>
                                     @endif
                                 </td>

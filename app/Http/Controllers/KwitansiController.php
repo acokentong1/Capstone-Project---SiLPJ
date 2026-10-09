@@ -13,7 +13,7 @@ class KwitansiController extends Controller
 {
     public function create($id)
     {
-        $belanja = Belanja::where('user_id', auth()->id())
+        $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
             ->findOrFail($id);
 
         $kwitansiAda = Kwitansi::where('belanja_id', $belanja->id)->first();
@@ -44,7 +44,7 @@ class KwitansiController extends Controller
         ]);
 
         return DB::transaction(function () use ($validated) {
-            $belanja = Belanja::where('user_id', auth()->id())
+            $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
 
@@ -114,7 +114,7 @@ class KwitansiController extends Controller
 
         $totalKwitansi = (clone $base)->count();
         $totalNilai = (clone $base)->sum('jumlah_uang');
-        $kwitansiLengkap = Belanja::where('user_id', auth()->id())
+        $kwitansiLengkap = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
             ->whereHas('notaPesanan')
             ->whereHas('kwitansi')
             ->whereHas('bapb')

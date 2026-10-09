@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureAccountIsActive::class,
             'admin' => EnsureAdmin::class,
+            'role' => EnsureRole::class,
         ]);
 
         $middleware->web(append: [

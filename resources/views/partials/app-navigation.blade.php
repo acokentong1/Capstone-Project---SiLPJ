@@ -1,6 +1,9 @@
 @php
     $navUser = Auth::user();
     $navSchool = $navUser?->schoolProfile;
+    $isAdmin = $navUser?->role === 'admin';
+    $isBendahara = $navUser?->role === 'bendahara';
+    $isKepalaSekolah = $navUser?->role === 'kepala_sekolah';
 @endphp
 
 <style>
@@ -271,11 +274,21 @@
 
         <div class="silpj-nav-links">
             <a href="{{ route('dashboard') }}" class="silpj-nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
+@if($isAdmin || $isBendahara)
             <a href="{{ route('belanja.index') }}" class="silpj-nav-link {{ request()->routeIs('belanja.*') ? 'active' : '' }}">Data Belanja</a>
+@endif
+@if($isAdmin || $isBendahara)
             <a href="{{ route('nota-pesanan.index') }}" class="silpj-nav-link {{ request()->routeIs('nota-pesanan.*') ? 'active' : '' }}">Nota Pesanan</a>
+@endif
+@if($isAdmin || $isBendahara)
             <a href="{{ route('kwitansi.index') }}" class="silpj-nav-link {{ request()->routeIs('kwitansi.*') ? 'active' : '' }}">Kwitansi</a>
+@endif
+@if($isAdmin || $isBendahara)
             <a href="{{ route('bapb.index') }}" class="silpj-nav-link {{ request()->routeIs('bapb.*') ? 'active' : '' }}">BAPB</a>
+@endif
             <a href="{{ route('laporan-lpj.index') }}" class="silpj-nav-link {{ request()->routeIs('laporan-lpj.*') ? 'active' : '' }}">Laporan LPJ</a>
+            <a href="{{ route('rekap.index') }}" class="silpj-nav-link {{ request()->routeIs('rekap.*') ? 'active' : '' }}">Rekap Keuangan</a>
+            
             <a href="{{ route('activity-logs.index') }}" class="silpj-nav-link {{ request()->routeIs('activity-logs.*') ? 'active' : '' }}">Aktivitas</a>
             @if($navUser?->isAdmin())
                 <a href="{{ route('admin.dashboard') }}" class="silpj-nav-link {{ request()->routeIs('admin.*') ? 'active' : '' }}">Admin</a>
@@ -328,10 +341,18 @@
                 </div>
                 <div class="silpj-nav-mobile-grid">
                     <a href="{{ route('dashboard') }}" class="silpj-nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
-                    <a href="{{ route('belanja.index') }}" class="silpj-nav-link {{ request()->routeIs('belanja.*') ? 'active' : '' }}">Data Belanja</a>
-                    <a href="{{ route('nota-pesanan.index') }}" class="silpj-nav-link {{ request()->routeIs('nota-pesanan.*') ? 'active' : '' }}">Nota Pesanan</a>
-                    <a href="{{ route('kwitansi.index') }}" class="silpj-nav-link {{ request()->routeIs('kwitansi.*') ? 'active' : '' }}">Kwitansi</a>
-                    <a href="{{ route('bapb.index') }}" class="silpj-nav-link {{ request()->routeIs('bapb.*') ? 'active' : '' }}">BAPB</a>
+        @if($isAdmin || $isBendahara)
+            <a href="{{ route('belanja.index') }}" class="silpj-nav-link {{ request()->routeIs('belanja.*') ? 'active' : '' }}">Data Belanja</a>
+@endif
+        @if($isAdmin || $isBendahara)
+            <a href="{{ route('nota-pesanan.index') }}" class="silpj-nav-link {{ request()->routeIs('nota-pesanan.*') ? 'active' : '' }}">Nota Pesanan</a>
+@endif
+        @if($isAdmin || $isBendahara)
+            <a href="{{ route('kwitansi.index') }}" class="silpj-nav-link {{ request()->routeIs('kwitansi.*') ? 'active' : '' }}">Kwitansi</a>
+@endif
+        @if($isAdmin || $isBendahara)
+            <a href="{{ route('bapb.index') }}" class="silpj-nav-link {{ request()->routeIs('bapb.*') ? 'active' : '' }}">BAPB</a>
+@endif
                     <a href="{{ route('laporan-lpj.index') }}" class="silpj-nav-link {{ request()->routeIs('laporan-lpj.*') ? 'active' : '' }}">Laporan LPJ</a>
                     <a href="{{ route('attention.index') }}" class="silpj-nav-link {{ request()->routeIs('attention.*') ? 'active' : '' }}">Perlu Perhatian @if(($navAttentionCount ?? 0) > 0)<span class="silpj-nav-mobile-count">{{ $navAttentionCount }}</span>@endif</a>
                     <a href="{{ route('activity-logs.index') }}" class="silpj-nav-link {{ request()->routeIs('activity-logs.*') ? 'active' : '' }}">Aktivitas</a>

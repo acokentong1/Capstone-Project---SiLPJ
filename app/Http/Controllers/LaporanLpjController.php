@@ -30,13 +30,21 @@ class LaporanLpjController extends Controller
         $periodeLabel = $this->periodeLabel($filters);
         $hasFilters = collect($filters)->contains(fn ($value) => filled($value));
 
+        $tahunAnggaran = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+            ->whereNotNull('tahun_anggaran')
+            ->select('tahun_anggaran')
+            ->distinct()
+            ->orderByDesc('tahun_anggaran')
+            ->pluck('tahun_anggaran');
+
         return view('laporan-lpj.index', compact(
             'school',
             'belanjas',
             'stats',
             'filters',
             'periodeLabel',
-            'hasFilters'
+            'hasFilters',
+            'tahunAnggaran'
         ));
     }
 
@@ -203,6 +211,7 @@ class LaporanLpjController extends Controller
             : '';
         $tanggalMulai = $this->normalizeDate($request->query('tanggal_mulai'));
         $tanggalSelesai = $this->normalizeDate($request->query('tanggal_selesai'));
+        $tahun = preg_match('/^\d{4}$/', (string) $request->query('tahun')) ? (int) $request->query('tahun') : null;
 
         if ($tanggalMulai && $tanggalSelesai && $tanggalMulai > $tanggalSelesai) {
             [$tanggalMulai, $tanggalSelesai] = [$tanggalSelesai, $tanggalMulai];
@@ -215,6 +224,7 @@ class LaporanLpjController extends Controller
             'dokumen_kurang' => $dokumenKurang,
             'tanggal_mulai' => $tanggalMulai,
             'tanggal_selesai' => $tanggalSelesai,
+            'tahun' => $tahun,
         ];
     }
 

@@ -98,3 +98,13 @@
         </div>
     </div>
 </nav>
+
+<a href="{{ route('rekap.index') }}"
+   class="{{ request()->routeIs('rekap.*') ? 'active' : '' }}">
+    Rekap Keuangan
+</a>
+
+<a href="{{ route('attention.index') }}"
+   class="{{ request()->routeIs('attention.*') ? 'active' : '' }}">
+    Perhatian
+</a>

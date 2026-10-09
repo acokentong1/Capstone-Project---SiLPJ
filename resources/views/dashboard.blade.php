@@ -560,6 +560,7 @@
         <div class="header-inner header-top">
             <div>
                 <h1 class="brand-title">Dashboard SILPJ</h1>
+                
                 <p class="brand-subtitle">Ringkasan transaksi dan kelengkapan dokumen pertanggungjawaban sekolah.</p>
             </div>
         </div>
@@ -569,16 +570,26 @@
         <section class="welcome">
             <div>
                 <h2>Selamat Datang, {{ auth()->user()->name }}</h2>
-                <p>
-                    Pantau transaksi, kelengkapan dokumen, dan progres LPJ sekolah dari satu halaman.
-                </p>
+                @if(auth()->user()->role == 'kepala_sekolah')
+
+<p>
+    Pantau penggunaan anggaran dan kelengkapan LPJ sekolah.
+</p>
+
+@else
+
+<p>
+    Kelola transaksi, anggaran, dan dokumen LPJ sekolah.
+</p>
+
+@endif
             </div>
 
             <div class="quick-actions">
-                <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
-                @if(($attentionSummary['total'] ?? 0) > 0)
-                    <a href="{{ route('attention.index') }}" class="btn btn-secondary">Perlu Perhatian ({{ $attentionSummary['total'] }})</a>
-                @endif
+                @if(!in_array(auth()->user()->role, ['kepala_sekolah']))
+                        <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                    @endif
+                
                 <a href="{{ route('laporan-lpj.index') }}" class="btn btn-secondary">Lihat Laporan LPJ</a>
             </div>
         </section>
@@ -610,6 +621,8 @@
         @endif
 
         <h2 class="section-title">Ringkasan LPJ</h2>
+
+        
 
         <section class="stats-grid" aria-label="Ringkasan LPJ">
             <article class="stat-card">
@@ -656,7 +669,7 @@
                 </div>
             </article>
         </section>
-
+ @include('components.ringkasan-anggaran')
         <section class="dashboard-grid">
             <article class="panel">
                 <div class="panel-header">
@@ -664,15 +677,36 @@
                     <a href="{{ route('belanja.index') }}" class="panel-link">Lihat semua</a>
                 </div>
 
-                @if ($transaksiTerbaru->isEmpty())
-                    <div class="empty-state">
-                        <strong>Belum ada transaksi belanja.</strong>
-                        Tambahkan transaksi pertama untuk mulai menyusun dokumen LPJ.
-                        <div style="margin-top: 14px;">
-                            <a href="{{ route('belanja.create') }}" class="btn btn-primary">Tambah Belanja</a>
-                        </div>
-                    </div>
-                @else
+          @if ($transaksiTerbaru->isEmpty())
+
+    <div class="empty-state">
+
+        <strong>Belum ada transaksi belanja.</strong>
+
+        @if(auth()->user()->role == 'kepala_sekolah')
+
+            <p>
+                Belum terdapat transaksi belanja pada tahun berjalan.
+                Silakan menunggu proses input dari Bendahara.
+            </p>
+
+        @else
+
+            <p>
+                Tambahkan transaksi pertama untuk mulai menyusun dokumen LPJ.
+            </p>
+
+            <div style="margin-top: 14px;">
+                <a href="{{ route('belanja.create') }}" class="btn btn-primary">
+                    Tambah Belanja
+                </a>
+            </div>
+
+        @endif
+
+    </div>
+
+@else
                     <div class="table-wrap">
                         <table>
                             <thead>
@@ -764,51 +798,7 @@
             </aside>
         </section>
 
-        <h2 class="section-title">Menu Utama</h2>
-
-        <section class="menu-grid">
-            <a href="{{ route('school-profile.index') }}" class="menu-card">
-                <div class="icon">🏫</div>
-                <h3>Profil Sekolah</h3>
-                <p>Kelola identitas sekolah, kepala sekolah, bendahara, NPSN, dan alamat.</p>
-            </a>
-
-            <a href="{{ route('belanja.index') }}" class="menu-card">
-                <div class="icon">🛒</div>
-                <h3>Data Belanja</h3>
-                <p>Input, edit, dan kelola seluruh transaksi pengeluaran sekolah.</p>
-            </a>
-
-            <a href="{{ route('nota-pesanan.index') }}" class="menu-card">
-                <div class="icon">📄</div>
-                <h3>Nota Pesanan</h3>
-                <p>Lihat riwayat Nota Pesanan dan dokumen berdasarkan transaksi belanja.</p>
-            </a>
-
-            <a href="{{ route('kwitansi.index') }}" class="menu-card">
-                <div class="icon">🧾</div>
-                <h3>Kwitansi</h3>
-                <p>Kelola dan cetak bukti pembayaran transaksi sekolah.</p>
-            </a>
-
-            <a href="{{ route('bapb.index') }}" class="menu-card">
-                <div class="icon">📦</div>
-                <h3>BAPB</h3>
-                <p>Kelola Berita Acara Pemeriksaan Barang dan dokumen pemeriksaan.</p>
-            </a>
-
-            <a href="{{ route('laporan-lpj.index') }}" class="menu-card">
-                <div class="icon">📊</div>
-                <h3>Laporan LPJ</h3>
-                <p>Rekap transaksi dan periksa kelengkapan seluruh dokumen LPJ.</p>
-            </a>
-
-            <a href="{{ route('attention.index') }}" class="menu-card">
-                <div class="icon">🔔</div>
-                <h3>Perlu Perhatian</h3>
-                <p>Prioritaskan transaksi yang masih kekurangan Nota Pesanan, Kwitansi, atau BAPB.</p>
-            </a>
-        </section>
+        
     </main>
 
     <footer class="footer">

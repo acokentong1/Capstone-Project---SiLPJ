@@ -13,11 +13,7 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-    ];
+    protected $fillable = ['name', 'email', 'password'];
 
     /**
      * Safe defaults for newly-created user model instances.
@@ -32,14 +28,11 @@ class User extends Authenticatable
         'is_active' => true,
     ];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['password', 'remember_token'];
 
     public function schoolProfile()
     {
-        return $this->hasOne(SchoolProfile::class);
+        return $this->belongsTo(SchoolProfile::class);
     }
 
     public function belanjas()
@@ -55,6 +48,16 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function isBendahara(): bool
+    {
+        return in_array($this->role, ['bendahara', 'admin']);
+    }
+
+    public function isKepalaSekolah(): bool
+    {
+        return in_array($this->role, ['kepala_sekolah', 'admin']);
     }
 
     public function isActive(): bool

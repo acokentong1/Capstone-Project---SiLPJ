@@ -75,9 +75,16 @@
                 @csrf
                 @method('PUT')
 
+@if(session('error'))
+<div class="alert alert-error">
+    <strong>⚠ Perhatian</strong>
+    {{ session('error') }}
+</div>
+@endif
+
                 @if ($errors->any())
-                    <div class="alert alert-error">
-                        <strong>Data belum dapat disimpan.</strong>
+                    <div class="alert alert-warning">
+                        <strong>⚠ Perhatian</strong>
                         <ul>
                             @foreach ($errors->all() as $error)
                                 <li>{{ $error }}</li>
@@ -98,6 +105,18 @@
                         Perubahan uraian, jumlah, harga, atau tanggal dapat ikut memengaruhi informasi yang ditampilkan pada dokumen terkait. Pastikan perubahan memang diperlukan.
                     </div>
                 @endif
+
+                
+<div class="field full">
+    <label>Tahun Anggaran <span>*</span></label>
+    <select name="tahun_anggaran" required>
+        @foreach(($tahunAnggaran ?? []) as $tahun)
+            <option value="{{ $tahun }}" @selected(old('tahun_anggaran', $belanja->tahun_anggaran ?? '') == $tahun)>
+                {{ $tahun }}
+            </option>
+        @endforeach
+    </select>
+</div>
 
                 @include('belanja._form', ['belanja' => $belanja])
             </form>

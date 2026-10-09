@@ -2,62 +2,166 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Bapb;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
 use App\Models\Belanja;
-use App\Models\Kwitansi;
+use App\Models\Anggaran;
 use App\Models\NotaPesanan;
+use App\Models\Kwitansi;
+use App\Models\Bapb;
 use App\Models\SchoolProfile;
-use App\Services\LpjAttentionService;
 
 class DashboardController extends Controller
 {
-    public function index(LpjAttentionService $attentionService)
+    public function index(Request $request)
     {
-        $userId = auth()->id();
+        $user = Auth::user();
 
-        $school = SchoolProfile::where('user_id', $userId)->first();
+        // tahun yang dipilih
+        $tahunDipilih = $request->tahun ?? now()->year;
 
-        $jumlahTransaksi = Belanja::where('user_id', $userId)->count();
-        $totalBelanja = (int) Belanja::where('user_id', $userId)->sum('total');
+        /*
+        |--------------------------------------------------------------------------
+        | Ambil data sekolah
+        |--------------------------------------------------------------------------
+        */
 
-        $jumlahNota = NotaPesanan::where('user_id', $userId)->count();
-        $jumlahKwitansi = Kwitansi::whereHas('belanja', function ($query) use ($userId) {
-            $query->where('user_id', $userId);
-        })->count();
-        $jumlahBapb = Bapb::where('user_id', $userId)->count();
+        $school = null;
 
-        $jumlahLengkap = Belanja::where('user_id', $userId)
-            ->whereHas('notaPesanan')
-            ->whereHas('kwitansi')
-            ->whereHas('bapb')
-            ->count();
+        if ($user) {
+            // ambil berdasarkan relasi user
+            $school = SchoolProfile::where('user_id', $user->id)->first();
 
-        $jumlahBelumLengkap = max(0, $jumlahTransaksi - $jumlahLengkap);
-        $persentaseLengkap = $jumlahTransaksi > 0
-            ? (int) round(($jumlahLengkap / $jumlahTransaksi) * 100)
-            : 0;
+            // fallback berdasarkan school_profile_id
+            if (!$school && $user->school_profile_id) {
+                $school = SchoolProfile::find($user->school_profile_id);
+            }
 
-        $transaksiTerbaru = Belanja::with(['notaPesanan', 'kwitansi', 'bapb'])
-            ->where('user_id', $userId)
-            ->orderByDesc('tanggal')
-            ->orderByDesc('id')
-            ->limit(5)
+            // fallback terakhir
+            if (!$school) {
+                $school = SchoolProfile::first();
+            }
+        }
+
+        $schoolId = $school ? $school->id : null;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Data Belanja
+        |--------------------------------------------------------------------------
+        */
+
+        $belanjas = Belanja::where('school_profile_id', $schoolId)
+            ->latest()
             ->get();
 
-        $attentionSummary = $attentionService->summary((int) $userId);
+        $totalBelanja = $belanjas->sum('total');
 
-        return view('dashboard', compact(
-            'school',
-            'jumlahTransaksi',
-            'totalBelanja',
-            'jumlahNota',
-            'jumlahKwitansi',
-            'jumlahBapb',
-            'jumlahLengkap',
-            'jumlahBelumLengkap',
-            'persentaseLengkap',
-            'transaksiTerbaru',
-            'attentionSummary'
-        ));
+        $jumlahTransaksi = $belanjas->count();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Status LPJ
+        |--------------------------------------------------------------------------
+        */
+
+        $jumlahLengkap = 0;
+        $jumlahBelumLengkap = 0;
+
+        foreach ($belanjas as $belanja) {
+            $lengkap =
+                NotaPesanan::where('belanja_id', $belanja->id)->exists() &&
+                Kwitansi::where('belanja_id', $belanja->id)->exists() &&
+                Bapb::where('belanja_id', $belanja->id)->exists();
+
+            if ($lengkap) {
+                $jumlahLengkap++;
+            } else {
+                $jumlahBelumLengkap++;
+            }
+        }
+
+        $transaksiTerbaru = $belanjas->take(5);
+
+        $jumlahNota = NotaPesanan::whereIn(
+            'belanja_id',
+            $belanjas->pluck('id'),
+        )->count();
+
+        $jumlahKwitansi = Kwitansi::whereIn(
+            'belanja_id',
+            $belanjas->pluck('id'),
+        )->count();
+
+        $jumlahBapb = Bapb::whereIn(
+            'belanja_id',
+            $belanjas->pluck('id'),
+        )->count();
+
+        $persentaseLengkap =
+            $jumlahTransaksi > 0
+                ? round(($jumlahLengkap / $jumlahTransaksi) * 100)
+                : 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Data Anggaran
+        |--------------------------------------------------------------------------
+        */
+
+        $anggarans = Anggaran::where('school_profile_id', $schoolId)
+            ->orderBy('tahun', 'desc')
+            ->get();
+
+        $anggaranAktif = Anggaran::where('school_profile_id', $schoolId)
+            ->where('tahun', $tahunDipilih)
+            ->first();
+
+        $tahunTersedia = $anggarans->pluck('tahun')->unique()->values();
+
+        $paguAnggaran = $anggaranAktif->jumlah ?? 0;
+
+        $realisasiAnggaran = Belanja::where('school_profile_id', $schoolId)
+            ->where('tahun_anggaran', $tahunDipilih)
+            ->sum('total');
+
+        $sisaAnggaran = $paguAnggaran - $realisasiAnggaran;
+
+        $serapanAnggaran =
+            $paguAnggaran > 0
+                ? round(($realisasiAnggaran / $paguAnggaran) * 100)
+                : 0;
+
+        $tahunAnggaran = $tahunDipilih;
+
+        $attentionSummary = [];
+
+        return view(
+            'dashboard',
+            compact(
+                'school',
+                'belanjas',
+                'totalBelanja',
+                'jumlahTransaksi',
+                'jumlahLengkap',
+                'jumlahBelumLengkap',
+                'transaksiTerbaru',
+                'persentaseLengkap',
+                'jumlahNota',
+                'jumlahKwitansi',
+                'jumlahBapb',
+                'anggarans',
+                'anggaranAktif',
+                'tahunDipilih',
+                'tahunAnggaran',
+                'tahunTersedia',
+                'paguAnggaran',
+                'realisasiAnggaran',
+                'sisaAnggaran',
+                'serapanAnggaran',
+                'attentionSummary',
+            ),
+        );
     }
 }

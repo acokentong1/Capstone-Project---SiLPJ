@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class SchoolProfile extends Model
 {
     protected $fillable = [
-        'user_id',
         'nama_sekolah',
         'npsn',
         'alamat',
@@ -18,8 +17,8 @@ class SchoolProfile extends Model
         'logo',
     ];
 
-    public function user()
+    public function users()
     {
-        return $this->belongsTo(User::class);
+        return $this->hasMany(User::class);
     }
 }
