@@ -669,6 +669,17 @@
                 </div>
             </article>
         </section>
+        @if(auth()->user()->role == 'kepala_sekolah')
+
+<div class="alert" role="status">
+    <div>
+        <strong>Mode Kepala Sekolah</strong>
+        <br>
+        Dashboard ini menampilkan monitoring penggunaan anggaran dan kelengkapan LPJ sekolah.
+    </div>
+</div>
+
+@endif
  @include('components.ringkasan-anggaran')
         <section class="dashboard-grid">
             <article class="panel">
@@ -732,11 +743,31 @@
                                         <td class="money">Rp {{ number_format($belanja->total, 0, ',', '.') }}</td>
                                         <td>
                                             <div class="docs">
-                                                @if ($belanja->notaPesanan)
-                                                    <a class="doc-chip doc-ready" href="{{ route('nota-pesanan.show', $belanja->notaPesanan->id) }}">Nota ✓</a>
-                                                @else
-                                                    <a class="doc-chip doc-missing" href="{{ route('nota-pesanan.create', $belanja->id) }}">+ Nota</a>
-                                                @endif
+                                               @if ($belanja->notaPesanan)
+
+<a class="doc-chip doc-ready" 
+href="{{ route('nota-pesanan.show', $belanja->notaPesanan->id) }}">
+Nota ✓
+</a>
+
+@else
+
+@if(auth()->user()->role != 'kepala_sekolah')
+
+<a class="doc-chip doc-missing"
+href="{{ route('nota-pesanan.create', $belanja->id) }}">
++ Nota
+</a>
+
+@else
+
+<span class="doc-chip doc-missing">
+Belum ada Nota
+</span>
+
+@endif
+
+@endif
 
                                                 @if ($belanja->kwitansi)
                                                     <a class="doc-chip doc-ready" href="{{ route('kwitansi.show', $belanja->kwitansi->id) }}">Kwitansi ✓</a>

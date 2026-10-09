@@ -30,11 +30,8 @@ class DashboardController extends Controller
         $school = null;
 
         if ($user) {
-            // ambil berdasarkan relasi user
-            $school = SchoolProfile::where('user_id', $user->id)->first();
-
-            // fallback berdasarkan school_profile_id
-            if (!$school && $user->school_profile_id) {
+            // Ambil berdasarkan school_profile_id milik user
+            if ($user->school_profile_id) {
                 $school = SchoolProfile::find($user->school_profile_id);
             }
 
