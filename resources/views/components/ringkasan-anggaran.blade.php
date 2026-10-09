@@ -12,15 +12,23 @@
 </div>
 
     <form method="GET" action="{{ route('dashboard') }}" class="year-filter">
-        <label>Tahun Anggaran</label>
-        <select name="tahun" onchange="this.form.submit()">
-            @foreach(\App\Models\Anggaran::where('user_id',auth()->id())->orderByDesc('tahun')->pluck('tahun') as $tahun)
-                <option value="{{ $tahun }}" {{ ($tahunAnggaran ?? date('Y')) == $tahun ? 'selected' : '' }}>
-                    {{ $tahun }}
-                </option>
-            @endforeach
-        </select>
-    </form>
+
+    <label>Tahun Anggaran</label>
+
+    <select name="tahun" onchange="this.form.submit()">
+
+        @foreach($tahunTersedia ?? [] as $tahun)
+
+            <option value="{{ $tahun }}"
+                {{ ($tahunAnggaran ?? date('Y')) == $tahun ? 'selected' : '' }}>
+                {{ $tahun }}
+            </option>
+
+        @endforeach
+
+    </select>
+
+</form>
 
 @if(($paguAnggaran ?? 0) == 0)
 <div class="empty-budget">

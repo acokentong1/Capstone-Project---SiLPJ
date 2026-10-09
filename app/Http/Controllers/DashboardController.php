@@ -111,11 +111,21 @@ class DashboardController extends Controller
             ->orderBy('tahun', 'desc')
             ->get();
 
+        $tahunTersedia = $anggarans
+            ->pluck('tahun')
+            ->unique()
+            ->sortDesc()
+            ->values();
+
+        // jika tahun yang dipilih belum ada,
+        // gunakan tahun pertama yang tersedia
+        if (!$tahunTersedia->contains($tahunDipilih)) {
+            $tahunDipilih = $tahunTersedia->first();
+        }
+
         $anggaranAktif = Anggaran::where('school_profile_id', $schoolId)
             ->where('tahun', $tahunDipilih)
             ->first();
-
-        $tahunTersedia = $anggarans->pluck('tahun')->unique()->values();
 
         $paguAnggaran = $anggaranAktif->jumlah ?? 0;
 
