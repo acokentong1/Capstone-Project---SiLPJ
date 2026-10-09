@@ -485,6 +485,58 @@
             font-size: 12px;
         }
 
+        .attention-box{
+    background:#fff7ed;
+    border:1px solid #fed7aa;
+    border-radius:14px;
+    padding:20px;
+    margin:20px 0;
+}
+
+.attention-title{
+    font-size:18px;
+    font-weight:800;
+    color:#c2410c;
+    margin-bottom:10px;
+}
+
+.attention-box p{
+    color:#7c2d12;
+}
+
+.attention-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:15px;
+    margin-top:15px;
+}
+
+.attention-grid div{
+    background:white;
+    padding:15px;
+    border-radius:10px;
+    border:1px solid #fed7aa;
+}
+
+.attention-grid span{
+    display:block;
+    font-size:13px;
+    color:#64748b;
+}
+
+.attention-grid strong{
+    display:block;
+    margin-top:8px;
+    font-size:18px;
+}
+
+
+@media(max-width:900px){
+    .attention-grid{
+        grid-template-columns:1fr;
+    }
+}
+
         @media (max-width: 1050px) {
             .stats-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -572,15 +624,70 @@
                 <h2>Selamat Datang, {{ auth()->user()->name }}</h2>
                 @if(auth()->user()->role == 'kepala_sekolah')
 
-<p>
-    Pantau penggunaan anggaran dan kelengkapan LPJ sekolah.
-</p>
+    @if(isset($attentionSummary) && $attentionSummary['belum_lengkap'] > 0)
 
-@else
+        <div class="attention-box">
 
-<p>
-    Kelola transaksi, anggaran, dan dokumen LPJ sekolah.
-</p>
+            <div class="attention-title">
+                ⚠ Pusat Perhatian Kepala Sekolah
+            </div>
+
+            <p>
+                Terdapat 
+                <strong>{{ $attentionSummary['belum_lengkap'] }}</strong>
+                transaksi yang belum lengkap dokumen LPJ.
+            </p>
+
+            <div class="attention-grid">
+
+                <div>
+                    <span>Nilai transaksi</span>
+                    <strong>
+                        Rp {{ number_format($attentionSummary['nilai_belum_lengkap'],0,',','.') }}
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Nota Pesanan belum ada</span>
+                    <strong>
+                        {{ $attentionSummary['nota_kurang'] }} transaksi
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Kwitansi belum ada</span>
+                    <strong>
+                        {{ $attentionSummary['kwitansi_kurang'] }} transaksi
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>BAPB belum ada</span>
+                    <strong>
+                        {{ $attentionSummary['bapb_kurang'] }} transaksi
+                    </strong>
+                </div>
+
+            </div>
+
+        </div>
+
+    @endif
+
+
+    <div class="alert" role="status">
+
+        <div>
+            <strong>Mode Kepala Sekolah</strong>
+            <br>
+            Dashboard ini menampilkan monitoring penggunaan anggaran dan kelengkapan LPJ sekolah.
+        </div>
+
+    </div>
+
 
 @endif
             </div>
@@ -669,17 +776,8 @@
                 </div>
             </article>
         </section>
-        @if(auth()->user()->role == 'kepala_sekolah')
+       
 
-<div class="alert" role="status">
-    <div>
-        <strong>Mode Kepala Sekolah</strong>
-        <br>
-        Dashboard ini menampilkan monitoring penggunaan anggaran dan kelengkapan LPJ sekolah.
-    </div>
-</div>
-
-@endif
  @include('components.ringkasan-anggaran')
         <section class="dashboard-grid">
             <article class="panel">

@@ -142,7 +142,47 @@ class DashboardController extends Controller
 
         $tahunAnggaran = $tahunDipilih;
 
-        $attentionSummary = [];
+        $attentionSummary = [
+            'belum_lengkap' => $jumlahBelumLengkap,
+
+            'nilai_belum_lengkap' => $belanjas
+                ->filter(function ($belanja) {
+                    $lengkap =
+                        NotaPesanan::where(
+                            'belanja_id',
+                            $belanja->id,
+                        )->exists() &&
+                        Kwitansi::where('belanja_id', $belanja->id)->exists() &&
+                        Bapb::where('belanja_id', $belanja->id)->exists();
+
+                    return !$lengkap;
+                })
+                ->sum('total'),
+
+            'nota_kurang' => $belanjas
+                ->filter(function ($belanja) {
+                    return !NotaPesanan::where(
+                        'belanja_id',
+                        $belanja->id,
+                    )->exists();
+                })
+                ->count(),
+
+            'kwitansi_kurang' => $belanjas
+                ->filter(function ($belanja) {
+                    return !Kwitansi::where(
+                        'belanja_id',
+                        $belanja->id,
+                    )->exists();
+                })
+                ->count(),
+
+            'bapb_kurang' => $belanjas
+                ->filter(function ($belanja) {
+                    return !Bapb::where('belanja_id', $belanja->id)->exists();
+                })
+                ->count(),
+        ];
 
         return view(
             'dashboard',
