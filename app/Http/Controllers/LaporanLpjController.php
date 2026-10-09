@@ -18,8 +18,13 @@ class LaporanLpjController extends Controller
     {
         $filters = $this->resolveFilters($request);
 
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $user = auth()->user();
 
+        $school = null;
+
+        if ($user && $user->school_profile_id) {
+            $school = SchoolProfile::find($user->school_profile_id);
+        }
         $belanjas = $this->filteredQuery($filters)
             ->with(['notaPesanan', 'kwitansi', 'bapb'])
             ->orderByDesc('tanggal')
@@ -28,30 +33,42 @@ class LaporanLpjController extends Controller
 
         $stats = $this->buildStats($belanjas);
         $periodeLabel = $this->periodeLabel($filters);
-        $hasFilters = collect($filters)->contains(fn ($value) => filled($value));
+        $hasFilters = collect($filters)->contains(fn($value) => filled($value));
 
-        $tahunAnggaran = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+        $tahunAnggaran = Belanja::where(
+            'school_profile_id',
+            auth()->user()->school_profile_id,
+        )
             ->whereNotNull('tahun_anggaran')
             ->select('tahun_anggaran')
             ->distinct()
             ->orderByDesc('tahun_anggaran')
             ->pluck('tahun_anggaran');
 
-        return view('laporan-lpj.index', compact(
-            'school',
-            'belanjas',
-            'stats',
-            'filters',
-            'periodeLabel',
-            'hasFilters',
-            'tahunAnggaran'
-        ));
+        return view(
+            'laporan-lpj.index',
+            compact(
+                'school',
+                'belanjas',
+                'stats',
+                'filters',
+                'periodeLabel',
+                'hasFilters',
+                'tahunAnggaran',
+            ),
+        );
     }
 
     public function exportCsv(Request $request): StreamedResponse
     {
         $filters = $this->resolveFilters($request);
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $user = auth()->user();
+
+        $school = null;
+
+        if ($user && $user->school_profile_id) {
+            $school = SchoolProfile::find($user->school_profile_id);
+        }
 
         $belanjas = $this->filteredQuery($filters)
             ->with(['notaPesanan', 'kwitansi', 'bapb'])
@@ -70,128 +87,181 @@ class LaporanLpjController extends Controller
             metadata: [
                 'jumlah_transaksi' => $stats['jumlahTransaksi'],
                 'periode' => $periodeLabel,
-            ]
+            ],
         );
 
-        return response()->streamDownload(function () use ($school, $belanjas, $stats, $periodeLabel) {
-            $handle = fopen('php://output', 'w');
+        return response()->streamDownload(
+            function () use ($school, $belanjas, $stats, $periodeLabel) {
+                $handle = fopen('php://output', 'w');
 
-            // UTF-8 BOM agar karakter Indonesia terbaca baik saat dibuka di Excel.
-            fwrite($handle, "\xEF\xBB\xBF");
+                // UTF-8 BOM agar karakter Indonesia terbaca baik saat dibuka di Excel.
+                fwrite($handle, "\xEF\xBB\xBF");
 
-            $this->csvRow($handle, ['LAPORAN PERTANGGUNGJAWABAN (LPJ)']);
-            $this->csvRow($handle, ['Sekolah', $school?->nama_sekolah ?? '-']);
-            $this->csvRow($handle, ['NPSN', $school?->npsn ?? '-']);
-            $this->csvRow($handle, ['Periode', $periodeLabel]);
-            $this->csvRow($handle, []);
-            $this->csvRow($handle, ['RINGKASAN']);
-            $this->csvRow($handle, ['Jumlah Transaksi', $stats['jumlahTransaksi']]);
-            $this->csvRow($handle, ['Total Belanja', $stats['totalBelanja']]);
-            $this->csvRow($handle, ['LPJ Lengkap', $stats['jumlahLengkap']]);
-            $this->csvRow($handle, ['LPJ Dalam Proses', $stats['jumlahProses']]);
-            $this->csvRow($handle, ['Belum Ada Dokumen', $stats['jumlahBelumAdaDokumen']]);
-            $this->csvRow($handle, ['Kelengkapan Dokumen', $stats['persenKelengkapanDokumen'] . '%']);
-            $this->csvRow($handle, ['Belanja Barang', $stats['totalBarang']]);
-            $this->csvRow($handle, ['Belanja Jasa', $stats['totalJasa']]);
-            $this->csvRow($handle, []);
-
-            $this->csvRow($handle, [
-                'No',
-                'Tanggal',
-                'No. Bukti',
-                'Kategori',
-                'Uraian',
-                'Jumlah',
-                'Harga Satuan',
-                'Total',
-                'Nota Pesanan',
-                'Kwitansi',
-                'BAPB',
-                'Status LPJ',
-            ]);
-
-            foreach ($belanjas as $index => $item) {
-                $jumlahDokumen = $this->documentCount($item);
-                $status = $jumlahDokumen === 3
-                    ? 'Lengkap'
-                    : ($jumlahDokumen === 0 ? 'Belum ada dokumen' : "Proses {$jumlahDokumen}/3");
+                $this->csvRow($handle, ['LAPORAN PERTANGGUNGJAWABAN (LPJ)']);
+                $this->csvRow($handle, [
+                    'Sekolah',
+                    $school?->nama_sekolah ?? '-',
+                ]);
+                $this->csvRow($handle, ['NPSN', $school?->npsn ?? '-']);
+                $this->csvRow($handle, ['Periode', $periodeLabel]);
+                $this->csvRow($handle, []);
+                $this->csvRow($handle, ['RINGKASAN']);
+                $this->csvRow($handle, [
+                    'Jumlah Transaksi',
+                    $stats['jumlahTransaksi'],
+                ]);
+                $this->csvRow($handle, [
+                    'Total Belanja',
+                    $stats['totalBelanja'],
+                ]);
+                $this->csvRow($handle, [
+                    'LPJ Lengkap',
+                    $stats['jumlahLengkap'],
+                ]);
+                $this->csvRow($handle, [
+                    'LPJ Dalam Proses',
+                    $stats['jumlahProses'],
+                ]);
+                $this->csvRow($handle, [
+                    'Belum Ada Dokumen',
+                    $stats['jumlahBelumAdaDokumen'],
+                ]);
+                $this->csvRow($handle, [
+                    'Kelengkapan Dokumen',
+                    $stats['persenKelengkapanDokumen'] . '%',
+                ]);
+                $this->csvRow($handle, [
+                    'Belanja Barang',
+                    $stats['totalBarang'],
+                ]);
+                $this->csvRow($handle, ['Belanja Jasa', $stats['totalJasa']]);
+                $this->csvRow($handle, []);
 
                 $this->csvRow($handle, [
-                    $index + 1,
-                    Carbon::parse($item->tanggal)->format('d-m-Y'),
-                    $item->nomor_bukti ?? '-',
-                    $item->kategori ?? '-',
-                    $item->uraian,
-                    $item->jumlah,
-                    $item->harga_satuan,
-                    $item->total,
-                    $item->notaPesanan ? 'Ada' : 'Belum',
-                    $item->kwitansi ? 'Ada' : 'Belum',
-                    $item->bapb ? 'Ada' : 'Belum',
-                    $status,
+                    'No',
+                    'Tanggal',
+                    'No. Bukti',
+                    'Kategori',
+                    'Uraian',
+                    'Jumlah',
+                    'Harga Satuan',
+                    'Total',
+                    'Nota Pesanan',
+                    'Kwitansi',
+                    'BAPB',
+                    'Status LPJ',
                 ]);
-            }
 
-            $this->csvRow($handle, []);
-            $this->csvRow($handle, ['TOTAL KESELURUHAN', '', '', '', '', '', '', $stats['totalBelanja']]);
+                foreach ($belanjas as $index => $item) {
+                    $jumlahDokumen = $this->documentCount($item);
+                    $status =
+                        $jumlahDokumen === 3
+                            ? 'Lengkap'
+                            : ($jumlahDokumen === 0
+                                ? 'Belum ada dokumen'
+                                : "Proses {$jumlahDokumen}/3");
 
-            fclose($handle);
-        }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
+                    $this->csvRow($handle, [
+                        $index + 1,
+                        Carbon::parse($item->tanggal)->format('d-m-Y'),
+                        $item->nomor_bukti ?? '-',
+                        $item->kategori ?? '-',
+                        $item->uraian,
+                        $item->jumlah,
+                        $item->harga_satuan,
+                        $item->total,
+                        $item->notaPesanan ? 'Ada' : 'Belum',
+                        $item->kwitansi ? 'Ada' : 'Belum',
+                        $item->bapb ? 'Ada' : 'Belum',
+                        $status,
+                    ]);
+                }
+
+                $this->csvRow($handle, []);
+                $this->csvRow($handle, [
+                    'TOTAL KESELURUHAN',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    $stats['totalBelanja'],
+                ]);
+
+                fclose($handle);
+            },
+            $filename,
+            [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+            ],
+        );
     }
 
     private function filteredQuery(array $filters): Builder
     {
         $query = Belanja::query()
-            ->where('user_id', auth()->id());
+            ->where('school_profile_id', auth()->user()->school_profile_id)
+            ->with(['notaPesanan', 'kwitansi', 'bapb']);
 
-        if ($filters['q'] !== '') {
-            $search = $filters['q'];
-            $query->where(function (Builder $builder) use ($search) {
-                $builder->where('nomor_bukti', 'like', "%{$search}%")
-                    ->orWhere('uraian', 'like', "%{$search}%");
+        // Filter pencarian
+        if (!empty($filters['q'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->where('uraian', 'like', '%' . $filters['q'] . '%')->orWhere(
+                    'nomor_bukti',
+                    'like',
+                    '%' . $filters['q'] . '%',
+                );
             });
         }
 
-        if ($filters['kategori'] !== '') {
+        // Filter kategori
+        if (!empty($filters['kategori'])) {
             $query->where('kategori', $filters['kategori']);
         }
 
-        if ($filters['tanggal_mulai']) {
+        // Filter tahun
+        if (!empty($filters['tahun'])) {
+            $query->where('tahun_anggaran', $filters['tahun']);
+        }
+
+        // Filter tanggal
+        if (!empty($filters['tanggal_mulai'])) {
             $query->whereDate('tanggal', '>=', $filters['tanggal_mulai']);
         }
 
-        if ($filters['tanggal_selesai']) {
+        if (!empty($filters['tanggal_selesai'])) {
             $query->whereDate('tanggal', '<=', $filters['tanggal_selesai']);
         }
 
-        if ($filters['status'] === 'lengkap') {
-            $query->whereHas('notaPesanan')
-                ->whereHas('kwitansi')
-                ->whereHas('bapb');
-        } elseif ($filters['status'] === 'proses') {
-            $query->where(function (Builder $builder) {
-                $builder->whereHas('notaPesanan')
-                    ->orWhereHas('kwitansi')
-                    ->orWhereHas('bapb');
-            })->where(function (Builder $builder) {
-                $builder->whereDoesntHave('notaPesanan')
-                    ->orWhereDoesntHave('kwitansi')
-                    ->orWhereDoesntHave('bapb');
-            });
-        } elseif ($filters['status'] === 'belum') {
-            $query->whereDoesntHave('notaPesanan')
-                ->whereDoesntHave('kwitansi')
-                ->whereDoesntHave('bapb');
+        // Filter dokumen kurang
+        if (!empty($filters['dokumen_kurang'])) {
+            if ($filters['dokumen_kurang'] == 'nota') {
+                $query->doesntHave('notaPesanan');
+            }
+
+            if ($filters['dokumen_kurang'] == 'kwitansi') {
+                $query->doesntHave('kwitansi');
+            }
+
+            if ($filters['dokumen_kurang'] == 'bapb') {
+                $query->doesntHave('bapb');
+            }
         }
 
-        if ($filters['dokumen_kurang'] === 'nota') {
-            $query->whereDoesntHave('notaPesanan');
-        } elseif ($filters['dokumen_kurang'] === 'kwitansi') {
-            $query->whereDoesntHave('kwitansi');
-        } elseif ($filters['dokumen_kurang'] === 'bapb') {
-            $query->whereDoesntHave('bapb');
+        // Filter status LPJ
+        if (!empty($filters['status'])) {
+            if ($filters['status'] == 'lengkap') {
+                $query->has('notaPesanan')->has('kwitansi')->has('bapb');
+            }
+
+            if ($filters['status'] == 'belum') {
+                $query->where(function ($q) {
+                    $q->doesntHave('notaPesanan')
+                        ->orDoesntHave('kwitansi')
+                        ->orDoesntHave('bapb');
+                });
+            }
         }
 
         return $query;
@@ -200,20 +270,40 @@ class LaporanLpjController extends Controller
     private function resolveFilters(Request $request): array
     {
         $q = trim((string) $request->query('q', ''));
-        $kategori = in_array($request->query('kategori'), ['Barang', 'Jasa'], true)
+        $kategori = in_array(
+            $request->query('kategori'),
+            ['Barang', 'Jasa'],
+            true,
+        )
             ? (string) $request->query('kategori')
             : '';
-        $status = in_array($request->query('status'), ['lengkap', 'proses', 'belum'], true)
+        $status = in_array(
+            $request->query('status'),
+            ['lengkap', 'proses', 'belum'],
+            true,
+        )
             ? (string) $request->query('status')
             : '';
-        $dokumenKurang = in_array($request->query('dokumen_kurang'), ['nota', 'kwitansi', 'bapb'], true)
+        $dokumenKurang = in_array(
+            $request->query('dokumen_kurang'),
+            ['nota', 'kwitansi', 'bapb'],
+            true,
+        )
             ? (string) $request->query('dokumen_kurang')
             : '';
         $tanggalMulai = $this->normalizeDate($request->query('tanggal_mulai'));
-        $tanggalSelesai = $this->normalizeDate($request->query('tanggal_selesai'));
-        $tahun = preg_match('/^\d{4}$/', (string) $request->query('tahun')) ? (int) $request->query('tahun') : null;
+        $tanggalSelesai = $this->normalizeDate(
+            $request->query('tanggal_selesai'),
+        );
+        $tahun = preg_match('/^\d{4}$/', (string) $request->query('tahun'))
+            ? (int) $request->query('tahun')
+            : null;
 
-        if ($tanggalMulai && $tanggalSelesai && $tanggalMulai > $tanggalSelesai) {
+        if (
+            $tanggalMulai &&
+            $tanggalSelesai &&
+            $tanggalMulai > $tanggalSelesai
+        ) {
             [$tanggalMulai, $tanggalSelesai] = [$tanggalSelesai, $tanggalMulai];
         }
 
@@ -272,25 +362,33 @@ class LaporanLpjController extends Controller
             'kurangNota' => max(0, $jumlahTransaksi - $jumlahNota),
             'kurangKwitansi' => max(0, $jumlahTransaksi - $jumlahKwitansi),
             'kurangBapb' => max(0, $jumlahTransaksi - $jumlahBapb),
-            'persenLpjLengkap' => $jumlahTransaksi > 0
-                ? (int) round(($jumlahLengkap / $jumlahTransaksi) * 100)
-                : 0,
-            'persenKelengkapanDokumen' => $maksimumDokumen > 0
-                ? (int) round(($jumlahDokumenTersedia / $maksimumDokumen) * 100)
-                : 0,
+            'persenLpjLengkap' =>
+                $jumlahTransaksi > 0
+                    ? (int) round(($jumlahLengkap / $jumlahTransaksi) * 100)
+                    : 0,
+            'persenKelengkapanDokumen' =>
+                $maksimumDokumen > 0
+                    ? (int) round(
+                        ($jumlahDokumenTersedia / $maksimumDokumen) * 100,
+                    )
+                    : 0,
             'nilaiLpjLengkap' => $nilaiLpjLengkap,
             'jumlahBarang' => $belanjas->where('kategori', 'Barang')->count(),
             'jumlahJasa' => $belanjas->where('kategori', 'Jasa')->count(),
-            'totalBarang' => (int) $belanjas->where('kategori', 'Barang')->sum('total'),
-            'totalJasa' => (int) $belanjas->where('kategori', 'Jasa')->sum('total'),
+            'totalBarang' => (int) $belanjas
+                ->where('kategori', 'Barang')
+                ->sum('total'),
+            'totalJasa' => (int) $belanjas
+                ->where('kategori', 'Jasa')
+                ->sum('total'),
         ];
     }
 
     private function documentCount(Belanja $belanja): int
     {
-        return (int) (bool) $belanja->notaPesanan
-            + (int) (bool) $belanja->kwitansi
-            + (int) (bool) $belanja->bapb;
+        return (int) (bool) $belanja->notaPesanan +
+            (int) (bool) $belanja->kwitansi +
+            (int) (bool) $belanja->bapb;
     }
 
     private function periodeLabel(array $filters): string
@@ -303,9 +401,9 @@ class LaporanLpjController extends Controller
                 return Carbon::parse($mulai)->translatedFormat('d F Y');
             }
 
-            return Carbon::parse($mulai)->translatedFormat('d F Y')
-                . ' s.d. '
-                . Carbon::parse($selesai)->translatedFormat('d F Y');
+            return Carbon::parse($mulai)->translatedFormat('d F Y') .
+                ' s.d. ' .
+                Carbon::parse($selesai)->translatedFormat('d F Y');
         }
 
         if ($mulai) {
@@ -313,7 +411,8 @@ class LaporanLpjController extends Controller
         }
 
         if ($selesai) {
-            return 'Sampai ' . Carbon::parse($selesai)->translatedFormat('d F Y');
+            return 'Sampai ' .
+                Carbon::parse($selesai)->translatedFormat('d F Y');
         }
 
         return 'Seluruh periode';
@@ -327,9 +426,7 @@ class LaporanLpjController extends Controller
 
         $date = DateTime::createFromFormat('Y-m-d', $value);
 
-        return $date && $date->format('Y-m-d') === $value
-            ? $value
-            : null;
+        return $date && $date->format('Y-m-d') === $value ? $value : null;
     }
 
     private function csvRow($handle, array $columns): void
