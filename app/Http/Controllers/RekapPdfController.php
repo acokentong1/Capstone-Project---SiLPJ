@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Belanja;
+use App\Support\RekapQuery;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -10,35 +10,22 @@ class RekapPdfController extends Controller
 {
     public function pdf(Request $request)
     {
-        $query = Belanja::query()
-            ->where('user_id', auth()->id());
-
-        if ($request->tahun) {
-            $query->where('tahun_anggaran', $request->tahun);
-        }
-
-        if ($request->bulan) {
-            $query->whereMonth('tanggal', $request->bulan);
-        }
-
-        if ($request->kategori) {
-            $query->where('kategori', $request->kategori);
-        }
-
-        $items = $query
-            ->orderBy('tanggal', 'asc')
+        $filters = RekapQuery::filters($request);
+        $items = RekapQuery::query(
+            (int) $request->user()->school_profile_id,
+            $filters,
+        )
+            ->orderBy('tanggal')
+            ->orderBy('id')
             ->get();
-
         $total = $items->sum('total');
-
-        $tahunAnggaran = $request->tahun;
-
-        return Pdf::loadView('pdf.rekap-keuangan', compact(
-            'items',
-            'total',
-            'tahunAnggaran'
-        ))
-        ->setPaper('A4','portrait')
-        ->download('LPJ-SILPJ-'.$tahunAnggaran.'.pdf');
+        $tahunAnggaran = $filters['tahun'];
+        $school = $request->user()->schoolProfile;
+        return Pdf::loadView(
+            'pdf.rekap-keuangan',
+            compact('items', 'total', 'tahunAnggaran', 'school'),
+        )
+            ->setPaper('A4', 'portrait')
+            ->download('LPJ-SILPJ-' . $tahunAnggaran . '.pdf');
     }
 }

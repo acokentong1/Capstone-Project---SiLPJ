@@ -13,17 +13,28 @@ class NotaPesananController extends Controller
 {
     public function index(Request $request)
     {
-        $query = NotaPesanan::with(['belanja.kwitansi', 'belanja.bapb'])
-            ->where('user_id', auth()->id());
+        $query = NotaPesanan::with([
+            'belanja.kwitansi',
+            'belanja.bapb',
+        ])->whereHas(
+            'belanja',
+            fn($q) => $q->where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            ),
+        );
 
         if ($request->filled('q')) {
             $search = trim((string) $request->q);
             $query->where(function ($q) use ($search) {
-                $q->where('nomor_nota', 'like', "%{$search}%")
-                    ->orWhereHas('belanja', function ($belanjaQuery) use ($search) {
-                        $belanjaQuery->where('uraian', 'like', "%{$search}%")
+                $q->where('nomor_nota', 'like', "%{$search}%")->orWhereHas(
+                    'belanja',
+                    function ($belanjaQuery) use ($search) {
+                        $belanjaQuery
+                            ->where('uraian', 'like', "%{$search}%")
                             ->orWhere('nomor_bukti', 'like', "%{$search}%");
-                    });
+                    },
+                );
             });
         }
 
@@ -41,43 +52,72 @@ class NotaPesananController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $totalNota = NotaPesanan::where('user_id', auth()->id())->count();
-        $totalNilai = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+        $totalNota = NotaPesanan::whereHas(
+            'belanja',
+            fn($q) => $q->where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            ),
+        )->count();
+        $totalNilai = Belanja::where(
+            'school_profile_id',
+            auth()->user()->school_profile_id ?? 0,
+        )
             ->whereHas('notaPesanan')
             ->sum('total');
-        $notaLengkap = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+        $notaLengkap = Belanja::where(
+            'school_profile_id',
+            auth()->user()->school_profile_id ?? 0,
+        )
             ->whereHas('notaPesanan')
             ->whereHas('kwitansi')
             ->whereHas('bapb')
             ->count();
 
-        return view('nota-pesanan.index', compact('notas', 'totalNota', 'totalNilai', 'notaLengkap'));
+        return view(
+            'nota-pesanan.index',
+            compact('notas', 'totalNota', 'totalNilai', 'notaLengkap'),
+        );
     }
 
     public function create($id)
     {
-        $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
-            ->findOrFail($id);
+        $belanja = Belanja::where(
+            'school_profile_id',
+            auth()->user()->school_profile_id ?? 0,
+        )->findOrFail($id);
 
         $notaAda = NotaPesanan::where('belanja_id', $belanja->id)
-            ->where('user_id', auth()->id())
+            ->whereHas(
+                'belanja',
+                fn($q) => $q->where(
+                    'school_profile_id',
+                    auth()->user()->school_profile_id ?? 0,
+                ),
+            )
             ->first();
 
         if ($notaAda) {
             return redirect()->route('nota-pesanan.show', $notaAda->id);
         }
 
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $school = auth()->user()->schoolProfile;
 
         if (!$school) {
             return redirect()
                 ->route('school-profile.create')
-                ->with('error', 'Lengkapi profil sekolah sebelum membuat Nota Pesanan.');
+                ->with(
+                    'error',
+                    'Lengkapi profil sekolah sebelum membuat Nota Pesanan.',
+                );
         }
 
         $nomorNota = $this->nextNomorNota();
 
-        return view('nota-pesanan.create', compact('belanja', 'school', 'nomorNota'));
+        return view(
+            'nota-pesanan.create',
+            compact('belanja', 'school', 'nomorNota'),
+        );
     }
 
     public function store(Request $request)
@@ -89,17 +129,29 @@ class NotaPesananController extends Controller
         return DB::transaction(function () use ($validated) {
             User::whereKey(auth()->id())->lockForUpdate()->firstOrFail();
 
-            $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+            $belanja = Belanja::where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            )
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
 
-            if (!SchoolProfile::where('user_id', auth()->id())->exists()) {
+            if (!auth()->user()->schoolProfile()->exists()) {
                 return redirect()
                     ->route('school-profile.create')
-                    ->with('error', 'Lengkapi profil sekolah sebelum membuat Nota Pesanan.');
+                    ->with(
+                        'error',
+                        'Lengkapi profil sekolah sebelum membuat Nota Pesanan.',
+                    );
             }
 
-            $notaAda = NotaPesanan::where('user_id', auth()->id())
+            $notaAda = NotaPesanan::whereHas(
+                'belanja',
+                fn($q) => $q->where(
+                    'school_profile_id',
+                    auth()->user()->school_profile_id ?? 0,
+                ),
+            )
                 ->where('belanja_id', $belanja->id)
                 ->first();
 
@@ -128,10 +180,16 @@ class NotaPesananController extends Controller
             'belanja.kwitansi',
             'belanja.bapb',
         ])
-            ->where('user_id', auth()->id())
+            ->whereHas(
+                'belanja',
+                fn($q) => $q->where(
+                    'school_profile_id',
+                    auth()->user()->school_profile_id ?? 0,
+                ),
+            )
             ->findOrFail($id);
 
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $school = auth()->user()->schoolProfile;
 
         return view('nota-pesanan.show', compact('nota', 'school'));
     }
@@ -141,7 +199,8 @@ class NotaPesananController extends Controller
         $urutan = NotaPesanan::where('user_id', auth()->id())->count() + 1;
 
         do {
-            $nomorNota = 'NP-' . str_pad((string) $urutan, 3, '0', STR_PAD_LEFT);
+            $nomorNota =
+                'NP-' . str_pad((string) $urutan, 3, '0', STR_PAD_LEFT);
             $sudahAda = NotaPesanan::where('user_id', auth()->id())
                 ->where('nomor_nota', $nomorNota)
                 ->exists();

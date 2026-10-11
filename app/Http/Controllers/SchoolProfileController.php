@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\SchoolProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use App\Models\User;
 
 class SchoolProfileController extends Controller
 {
     public function index()
     {
-        $school = SchoolProfile::where('user_id', Auth::id())->first();
+        $school = Auth::user()->schoolProfile;
 
         if (!$school) {
             return redirect()->route('school-profile.create');
@@ -21,7 +23,7 @@ class SchoolProfileController extends Controller
 
     public function create()
     {
-        $school = SchoolProfile::where('user_id', Auth::id())->first();
+        $school = Auth::user()->schoolProfile;
 
         if ($school) {
             return redirect()->route('school-profile.edit', $school);
@@ -34,10 +36,16 @@ class SchoolProfileController extends Controller
     {
         $validated = $this->validateSchoolProfile($request);
 
-        $school = SchoolProfile::updateOrCreate(
-            ['user_id' => Auth::id()],
-            $validated
-        );
+        DB::transaction(function () use ($validated) {
+            $user = User::whereKey(Auth::id())->lockForUpdate()->firstOrFail();
+            if ($user->schoolProfile) {
+                $user->schoolProfile->update($validated);
+            } else {
+                $school = SchoolProfile::create($validated);
+                $user->school_profile_id = $school->id;
+                $user->save();
+            }
+        });
 
         return redirect()
             ->route('school-profile.index')
@@ -77,8 +85,12 @@ class SchoolProfileController extends Controller
         ]);
     }
 
-    private function ensureOwnedByAuthenticatedUser(SchoolProfile $schoolProfile): void
-    {
-        abort_if((int) $schoolProfile->user_id !== (int) Auth::id(), 403);
+    private function ensureOwnedByAuthenticatedUser(
+        SchoolProfile $schoolProfile,
+    ): void {
+        abort_if(
+            (int) $schoolProfile->id !== (int) Auth::user()->school_profile_id,
+            403,
+        );
     }
 }

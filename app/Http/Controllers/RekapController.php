@@ -3,77 +3,76 @@
 namespace App\Http\Controllers;
 
 use App\Models\Belanja;
+use App\Support\RekapQuery;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class RekapController extends Controller
 {
     public function index(Request $request)
     {
-        $year = $request->year ?? now()->year;
-        $month = $request->month;
-        $kategori = $request->kategori;
-
-        $query = Belanja::where('user_id', Auth::id())
-            ->whereYear('tanggal', $year);
-
-        if ($month) {
-            $query->whereMonth('tanggal', $month);
-        }
-
-        if ($kategori) {
-            $query->where('kategori', $kategori);
-        }
-
-        $items = $query->latest('tanggal')->get();
-
+        $filters = RekapQuery::filters($request);
+        $schoolId = (int) $request->user()->school_profile_id;
+        $year = $filters['tahun'];
+        $month = $filters['bulan'];
+        $kategori = $filters['kategori'];
+        $items = RekapQuery::query($schoolId, $filters)
+            ->latest('tanggal')
+            ->orderByDesc('id')
+            ->get();
         $summary = [
             'total' => $items->sum('total'),
             'jumlah' => $items->count(),
             'barang' => $items->where('kategori', 'Barang')->sum('total'),
             'jasa' => $items->where('kategori', 'Jasa')->sum('total'),
         ];
-
-        // Grafik tetap mengikuti filter tahun
-        $monthlyQuery = Belanja::where('user_id', Auth::id())
-            ->whereYear('tanggal', $year);
-
-        if ($kategori) {
-            $monthlyQuery->where('kategori', $kategori);
-        }
-
-        if ($month) {
-            $monthlyQuery->whereMonth('tanggal', $month);
-        }
-
-        $monthly = $monthlyQuery
-            ->selectRaw('MONTH(tanggal) as bulan, SUM(total) as total')
-            ->groupBy('bulan')
-            ->orderBy('bulan')
-            ->get();
-
         $namaBulan = [
-            1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',
-            5=>'Mei',6=>'Jun',7=>'Jul',8=>'Agu',
-            9=>'Sep',10=>'Okt',11=>'Nov',12=>'Des'
+            1 => 'Jan',
+            2 => 'Feb',
+            3 => 'Mar',
+            4 => 'Apr',
+            5 => 'Mei',
+            6 => 'Jun',
+            7 => 'Jul',
+            8 => 'Agu',
+            9 => 'Sep',
+            10 => 'Okt',
+            11 => 'Nov',
+            12 => 'Des',
         ];
-
-        $labelsBulan = [];
-        $dataBulan = [];
-
-        foreach ($monthly as $row) {
-            $labelsBulan[] = $namaBulan[$row->bulan];
-            $dataBulan[] = $row->total;
-        }
-
-        return view('rekap.index', compact(
-            'items',
-            'summary',
-            'labelsBulan',
-            'dataBulan',
-            'year',
-            'month',
-            'kategori'
-        ));
+        $monthly = $items
+            ->groupBy(fn($item) => Carbon::parse($item->tanggal)->month)
+            ->sortKeys();
+        $labelsBulan = $monthly
+            ->keys()
+            ->map(fn($month) => $namaBulan[$month])
+            ->values()
+            ->all();
+        $dataBulan = $monthly
+            ->map(fn($rows) => $rows->sum('total'))
+            ->values()
+            ->all();
+        $tahunList = Belanja::where('school_profile_id', $schoolId)
+            ->whereNotNull('tahun_anggaran')
+            ->distinct()
+            ->pluck('tahun_anggaran')
+            ->push($year)
+            ->unique()
+            ->sortDesc()
+            ->values();
+        return view(
+            'rekap.index',
+            compact(
+                'items',
+                'summary',
+                'labelsBulan',
+                'dataBulan',
+                'year',
+                'month',
+                'kategori',
+                'tahunList',
+                'filters',
+            ),
+        );
     }
 }

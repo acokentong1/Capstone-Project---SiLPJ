@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Belanja;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\RekapExport;
+use App\Support\RekapQuery;
+use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class RekapExportController extends Controller
 {
@@ -14,13 +13,11 @@ class RekapExportController extends Controller
     {
         return Excel::download(
             new RekapExport(
-                Auth::id(),
-                $request->year,
-                $request->month,
-                $request->kategori,
-                $request->tahun_anggaran
+                (int) $request->user()->school_profile_id,
+                RekapQuery::filters($request),
+                $request->user()->schoolProfile?->nama_sekolah ?? '-',
             ),
-            'rekap-keuangan-silpj.xlsx'
+            'rekap-keuangan-silpj.xlsx',
         );
     }
 }

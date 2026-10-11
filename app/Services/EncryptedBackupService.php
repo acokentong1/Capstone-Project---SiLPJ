@@ -16,16 +16,17 @@ use Throwable;
 class EncryptedBackupService
 {
     private const FORMAT = 'SILPJ_ENCRYPTED_BACKUP';
-    private const FORMAT_VERSION = 2;
-    private const SUPPORTED_VERSIONS = [1, 2];
+    private const FORMAT_VERSION = 3;
+    private const SUPPORTED_VERSIONS = [3];
 
     /**
      * Tabel inti SILPJ yang aman untuk dibawa ke backup aplikasi.
      * Cache, sessions, jobs, migrations dan token reset sengaja tidak disertakan.
      */
     private const TABLES = [
-        'users',
         'school_profiles',
+        'users',
+        'anggarans',
         'belanjas',
         'nota_pesanans',
         'kwitansis',
@@ -38,25 +39,66 @@ class EncryptedBackupService
         'bapbs',
         'kwitansis',
         'nota_pesanans',
-        'school_profiles',
         'belanjas',
+        'anggarans',
         'users',
+        'school_profiles',
     ];
 
     private const REQUIRED_COLUMNS = [
-        'users' => ['id', 'name', 'email', 'password'],
-        'school_profiles' => ['id', 'user_id', 'nama_sekolah'],
-        'belanjas' => ['id', 'user_id', 'tanggal', 'uraian', 'jumlah', 'harga_satuan', 'total'],
-        'nota_pesanans' => ['id', 'user_id', 'belanja_id', 'nomor_nota', 'tanggal_nota'],
-        'kwitansis' => ['id', 'belanja_id', 'nomor_kwitansi', 'tanggal_kwitansi', 'penerima', 'jumlah_uang'],
-        'bapbs' => ['id', 'user_id', 'belanja_id', 'nomor_bapb', 'tanggal_bapb'],
+        'users' => ['id', 'name', 'email', 'password', 'school_profile_id'],
+        'school_profiles' => ['id', 'nama_sekolah'],
+        'anggarans' => [
+            'id',
+            'user_id',
+            'school_profile_id',
+            'tahun',
+            'jumlah',
+        ],
+        'belanjas' => [
+            'id',
+            'user_id',
+            'school_profile_id',
+            'tanggal',
+            'uraian',
+            'jumlah',
+            'harga_satuan',
+            'total',
+        ],
+        'nota_pesanans' => [
+            'id',
+            'user_id',
+            'belanja_id',
+            'nomor_nota',
+            'tanggal_nota',
+        ],
+        'kwitansis' => [
+            'id',
+            'belanja_id',
+            'nomor_kwitansi',
+            'tanggal_kwitansi',
+            'penerima',
+            'jumlah_uang',
+        ],
+        'bapbs' => [
+            'id',
+            'user_id',
+            'belanja_id',
+            'nomor_bapb',
+            'tanggal_bapb',
+        ],
         'activity_logs' => ['id', 'user_id', 'action', 'description'],
     ];
 
     public function createEncryptedPayload(): array
     {
         $payload = $this->createPayloadArray();
-        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $json = json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE |
+                JSON_UNESCAPED_SLASHES |
+                JSON_THROW_ON_ERROR,
+        );
         $encrypted = Crypt::encryptString($json);
 
         return [
@@ -74,14 +116,14 @@ class EncryptedBackupService
         $schema = [];
 
         foreach (self::TABLES as $table) {
-            if (! Schema::hasTable($table)) {
+            if (!Schema::hasTable($table)) {
                 continue;
             }
 
             $rows = DB::table($table)
                 ->orderBy('id')
                 ->get()
-                ->map(fn ($row) => (array) $row)
+                ->map(fn($row) => (array) $row)
                 ->all();
 
             $tables[$table] = $rows;
@@ -90,7 +132,9 @@ class EncryptedBackupService
         }
 
         if ($tables === []) {
-            throw new RuntimeException('Tidak ada tabel SILPJ yang dapat dibackup.');
+            throw new RuntimeException(
+                'Tidak ada tabel SILPJ yang dapat dibackup.',
+            );
         }
 
         return [
@@ -119,21 +163,27 @@ class EncryptedBackupService
         return $counts;
     }
 
-    public function inspectEncryptedContents(string $contents, ?string $currentAdminEmail = null): array
-    {
+    public function inspectEncryptedContents(
+        string $contents,
+        ?string $currentAdminEmail = null,
+    ): array {
         try {
             $json = Crypt::decryptString(trim($contents));
         } catch (DecryptException) {
-            throw new RuntimeException('File backup tidak dapat didekripsi. Pastikan file berasal dari instalasi SILPJ dengan APP_KEY yang sama.');
+            throw new RuntimeException(
+                'File backup tidak dapat didekripsi. Pastikan file berasal dari instalasi SILPJ dengan APP_KEY yang sama.',
+            );
         }
 
         try {
             $payload = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
-            throw new RuntimeException('Isi backup rusak atau bukan format backup SILPJ yang valid.');
+            throw new RuntimeException(
+                'Isi backup rusak atau bukan format backup SILPJ yang valid.',
+            );
         }
 
-        if (! is_array($payload)) {
+        if (!is_array($payload)) {
             throw new RuntimeException('Struktur backup SILPJ tidak valid.');
         }
 
@@ -150,26 +200,37 @@ class EncryptedBackupService
 
         foreach ($users as $user) {
             $role = $user['role'] ?? 'user';
-            $isActive = array_key_exists('is_active', $user) ? (bool) $user['is_active'] : true;
+            $isActive = array_key_exists('is_active', $user)
+                ? (bool) $user['is_active']
+                : true;
 
             if ($role === 'admin' && $isActive) {
                 $activeAdmins++;
             }
 
-            if ($currentAdminEmail !== null && strcasecmp((string) ($user['email'] ?? ''), $currentAdminEmail) === 0) {
+            if (
+                $currentAdminEmail !== null &&
+                strcasecmp(
+                    (string) ($user['email'] ?? ''),
+                    $currentAdminEmail,
+                ) === 0
+            ) {
                 $currentAdminFound = true;
             }
         }
 
         $warnings = [];
         if (($payload['format_version'] ?? 1) < self::FORMAT_VERSION) {
-            $warnings[] = 'Backup menggunakan format lama. SILPJ akan melakukan normalisasi kolom yang aman saat restore.';
+            $warnings[] =
+                'Backup menggunakan format lama. SILPJ akan melakukan normalisasi kolom yang aman saat restore.';
         }
         if ($activeAdmins === 0) {
-            $warnings[] = 'Backup tidak memiliki admin aktif. Saat restore, akun admin yang menjalankan proses akan tetap dipertahankan sebagai admin aktif.';
+            $warnings[] =
+                'Backup tidak memiliki admin aktif. Saat restore, akun admin yang menjalankan proses akan tetap dipertahankan sebagai admin aktif.';
         }
-        if ($currentAdminEmail !== null && ! $currentAdminFound) {
-            $warnings[] = 'Email admin yang sedang login tidak ditemukan di backup. Restore tidak dapat dijalankan untuk mencegah kehilangan akses.';
+        if ($currentAdminEmail !== null && !$currentAdminFound) {
+            $warnings[] =
+                'Email admin yang sedang login tidak ditemukan di backup. Restore tidak dapat dijalankan untuk mencegah kehilangan akses.';
         }
 
         return [
@@ -191,11 +252,18 @@ class EncryptedBackupService
     public function storeSafetyBackup(): array
     {
         $backup = $this->createEncryptedPayload();
-        $filename = 'SILPJ-pre-restore-' . now()->format('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.silpjbackup';
+        $filename =
+            'SILPJ-pre-restore-' .
+            now()->format('Ymd-His') .
+            '-' .
+            bin2hex(random_bytes(3)) .
+            '.silpjbackup';
         $path = 'silpj/safety-backups/' . $filename;
 
-        if (! Storage::disk('local')->put($path, $backup['contents'])) {
-            throw new RuntimeException('Backup pengaman sebelum restore tidak dapat disimpan. Restore dibatalkan.');
+        if (!Storage::disk('local')->put($path, $backup['contents'])) {
+            throw new RuntimeException(
+                'Backup pengaman sebelum restore tidak dapat disimpan. Restore dibatalkan.',
+            );
         }
 
         return [
@@ -210,7 +278,7 @@ class EncryptedBackupService
     {
         $disk = Storage::disk('local');
         $files = collect($disk->files('silpj/safety-backups'))
-            ->filter(fn (string $path) => str_ends_with($path, '.silpjbackup'))
+            ->filter(fn(string $path) => str_ends_with($path, '.silpjbackup'))
             ->map(function (string $path) use ($disk): array {
                 return [
                     'path' => $path,
@@ -236,7 +304,10 @@ class EncryptedBackupService
         $actorRowFound = false;
 
         foreach ($payload['tables']['users'] as &$userRow) {
-            if (strcasecmp((string) ($userRow['email'] ?? ''), $actorEmail) === 0) {
+            if (
+                strcasecmp((string) ($userRow['email'] ?? ''), $actorEmail) ===
+                0
+            ) {
                 $actorRowFound = true;
                 $userRow['password'] = $actorPassword;
                 $userRow['role'] = 'admin';
@@ -247,8 +318,10 @@ class EncryptedBackupService
         }
         unset($userRow);
 
-        if (! $actorRowFound) {
-            throw new RuntimeException('Restore dibatalkan karena akun admin yang sedang digunakan tidak ada di dalam backup.');
+        if (!$actorRowFound) {
+            throw new RuntimeException(
+                'Restore dibatalkan karena akun admin yang sedang digunakan tidak ada di dalam backup.',
+            );
         }
 
         $counts = [];
@@ -261,11 +334,14 @@ class EncryptedBackupService
             }
 
             foreach (self::TABLES as $table) {
-                if (! Schema::hasTable($table)) {
+                if (!Schema::hasTable($table)) {
                     continue;
                 }
 
-                $rows = $this->normalizeRowsForCurrentSchema($table, $payload['tables'][$table] ?? []);
+                $rows = $this->normalizeRowsForCurrentSchema(
+                    $table,
+                    $payload['tables'][$table] ?? [],
+                );
                 $counts[$table] = count($rows);
 
                 foreach (array_chunk($rows, 250) as $chunk) {
@@ -289,7 +365,7 @@ class EncryptedBackupService
                 'restore',
                 'Memulihkan database SILPJ dari backup terenkripsi',
                 null,
-                ['record_counts' => $counts]
+                ['record_counts' => $counts],
             );
         }
 
@@ -299,59 +375,91 @@ class EncryptedBackupService
     private function validatePayload(array $payload): void
     {
         if (($payload['format'] ?? null) !== self::FORMAT) {
-            throw new RuntimeException('File bukan backup SILPJ yang dikenali.');
+            throw new RuntimeException(
+                'File bukan backup SILPJ yang dikenali.',
+            );
         }
 
         $version = (int) ($payload['format_version'] ?? 1);
-        if (! in_array($version, self::SUPPORTED_VERSIONS, true)) {
-            throw new RuntimeException("Versi format backup {$version} belum didukung oleh aplikasi ini.");
+        if (!in_array($version, self::SUPPORTED_VERSIONS, true)) {
+            throw new RuntimeException(
+                "Backup versi {$version} tidak sesuai struktur sekolah saat ini. Gunakan backup versi 3; backup lama perlu dikonversi dan diuji terpisah.",
+            );
         }
 
-        if (! isset($payload['tables']) || ! is_array($payload['tables'])) {
-            throw new RuntimeException('Backup tidak memiliki struktur tabel yang valid.');
+        if (!isset($payload['tables']) || !is_array($payload['tables'])) {
+            throw new RuntimeException(
+                'Backup tidak memiliki struktur tabel yang valid.',
+            );
         }
 
         foreach (self::TABLES as $table) {
-            if (! array_key_exists($table, $payload['tables']) || ! is_array($payload['tables'][$table])) {
-                throw new RuntimeException("Backup tidak lengkap. Tabel {$table} tidak ditemukan.");
+            if (
+                !array_key_exists($table, $payload['tables']) ||
+                !is_array($payload['tables'][$table])
+            ) {
+                throw new RuntimeException(
+                    "Backup tidak lengkap. Tabel {$table} tidak ditemukan.",
+                );
             }
 
-            if (! Schema::hasTable($table)) {
-                throw new RuntimeException("Database aplikasi saat ini belum memiliki tabel {$table}. Jalankan migration terbaru sebelum restore.");
+            if (!Schema::hasTable($table)) {
+                throw new RuntimeException(
+                    "Database aplikasi saat ini belum memiliki tabel {$table}. Jalankan migration terbaru sebelum restore.",
+                );
             }
 
             $currentColumns = Schema::getColumnListing($table);
             $currentColumnMap = array_fill_keys($currentColumns, true);
 
             foreach ($payload['tables'][$table] as $index => $row) {
-                if (! is_array($row)) {
-                    throw new RuntimeException("Baris ke-" . ($index + 1) . " pada tabel {$table} tidak valid.");
+                if (!is_array($row)) {
+                    throw new RuntimeException(
+                        'Baris ke-' .
+                            ($index + 1) .
+                            " pada tabel {$table} tidak valid.",
+                    );
                 }
 
                 foreach (self::REQUIRED_COLUMNS[$table] as $required) {
-                    if (! array_key_exists($required, $row)) {
-                        throw new RuntimeException("Kolom wajib {$table}.{$required} tidak ditemukan pada backup.");
+                    if (!array_key_exists($required, $row)) {
+                        throw new RuntimeException(
+                            "Kolom wajib {$table}.{$required} tidak ditemukan pada backup.",
+                        );
                     }
                 }
 
                 foreach (array_keys($row) as $column) {
-                    if (! isset($currentColumnMap[$column])) {
-                        throw new RuntimeException("Backup menggunakan kolom {$table}.{$column} yang belum tersedia pada aplikasi ini. Perbarui aplikasi sebelum restore.");
+                    if (!isset($currentColumnMap[$column])) {
+                        throw new RuntimeException(
+                            "Backup menggunakan kolom {$table}.{$column} yang belum tersedia pada aplikasi ini. Perbarui aplikasi sebelum restore.",
+                        );
                     }
                 }
             }
         }
 
-        if ($version >= 2 && isset($payload['schema']) && is_array($payload['schema'])) {
+        if (
+            $version >= 2 &&
+            isset($payload['schema']) &&
+            is_array($payload['schema'])
+        ) {
             foreach ($payload['schema'] as $table => $columns) {
-                if (! in_array($table, self::TABLES, true) || ! is_array($columns)) {
+                if (
+                    !in_array($table, self::TABLES, true) ||
+                    !is_array($columns)
+                ) {
                     continue;
                 }
 
                 $currentColumns = Schema::getColumnListing($table);
                 $unknown = array_diff($columns, $currentColumns);
                 if ($unknown !== []) {
-                    throw new RuntimeException('Schema backup lebih baru daripada aplikasi ini pada tabel ' . $table . '.');
+                    throw new RuntimeException(
+                        'Schema backup lebih baru daripada aplikasi ini pada tabel ' .
+                            $table .
+                            '.',
+                    );
                 }
             }
         }
@@ -363,7 +471,11 @@ class EncryptedBackupService
     {
         $userIds = $this->uniqueIds($tables['users'], 'users');
         $belanjaIds = $this->uniqueIds($tables['belanjas'], 'belanjas');
-        $this->uniqueIds($tables['school_profiles'], 'school_profiles');
+        $schoolIds = $this->uniqueIds(
+            $tables['school_profiles'],
+            'school_profiles',
+        );
+        $this->uniqueIds($tables['anggarans'], 'anggarans');
         $this->uniqueIds($tables['nota_pesanans'], 'nota_pesanans');
         $this->uniqueIds($tables['kwitansis'], 'kwitansis');
         $this->uniqueIds($tables['bapbs'], 'bapbs');
@@ -376,25 +488,48 @@ class EncryptedBackupService
                 throw new RuntimeException('Backup memiliki akun tanpa email.');
             }
             if (isset($emails[$email])) {
-                throw new RuntimeException("Backup memiliki email akun ganda: {$email}.");
+                throw new RuntimeException(
+                    "Backup memiliki email akun ganda: {$email}.",
+                );
             }
             $emails[$email] = true;
         }
 
-        $schoolOwners = [];
-        foreach ($tables['school_profiles'] as $row) {
-            $userId = (string) $row['user_id'];
-            $this->assertExists($userIds, $userId, 'Profil sekolah mengacu ke user yang tidak ada.');
-            if (isset($schoolOwners[$userId])) {
-                throw new RuntimeException('Backup memiliki lebih dari satu profil sekolah untuk user yang sama.');
+        $userSchools = [];
+        foreach ($tables['users'] as $row) {
+            $userSchools[(string) $row['id']] = $row['school_profile_id'];
+        }
+        foreach (['users', 'belanjas', 'anggarans'] as $table) {
+            foreach ($tables[$table] as $row) {
+                if ($row['school_profile_id'] !== null) {
+                    $this->assertExists(
+                        $schoolIds,
+                        (string) $row['school_profile_id'],
+                        'Relasi sekolah pada backup tidak valid.',
+                    );
+                }
+                if ($table === 'anggarans') {
+                    $this->assertExists(
+                        $userIds,
+                        (string) $row['user_id'],
+                        'Anggaran mengacu ke user yang tidak ada.',
+                    );
+                }
             }
-            $schoolOwners[$userId] = true;
+        }
+        $belanjaSchools = [];
+        foreach ($tables['belanjas'] as $row) {
+            $belanjaSchools[(string) $row['id']] = $row['school_profile_id'];
         }
 
         $belanjaOwner = [];
         foreach ($tables['belanjas'] as $row) {
             $userId = (string) $row['user_id'];
-            $this->assertExists($userIds, $userId, 'Data belanja mengacu ke user yang tidak ada.');
+            $this->assertExists(
+                $userIds,
+                $userId,
+                'Data belanja mengacu ke user yang tidak ada.',
+            );
             $belanjaOwner[(string) $row['id']] = $userId;
         }
 
@@ -402,13 +537,30 @@ class EncryptedBackupService
         foreach ($tables['nota_pesanans'] as $row) {
             $belanjaId = (string) $row['belanja_id'];
             $userId = (string) $row['user_id'];
-            $this->assertExists($belanjaIds, $belanjaId, 'Nota Pesanan mengacu ke transaksi yang tidak ada.');
-            $this->assertExists($userIds, $userId, 'Nota Pesanan mengacu ke user yang tidak ada.');
-            if (($belanjaOwner[$belanjaId] ?? null) !== $userId) {
-                throw new RuntimeException('Pemilik Nota Pesanan tidak konsisten dengan pemilik transaksi.');
+            $this->assertExists(
+                $belanjaIds,
+                $belanjaId,
+                'Nota Pesanan mengacu ke transaksi yang tidak ada.',
+            );
+            $this->assertExists(
+                $userIds,
+                $userId,
+                'Nota Pesanan mengacu ke user yang tidak ada.',
+            );
+            if (
+                ($belanjaOwner[$belanjaId] ?? null) !== $userId &&
+                (empty($userSchools[$userId]) ||
+                    (string) $userSchools[$userId] !==
+                        (string) ($belanjaSchools[$belanjaId] ?? ''))
+            ) {
+                throw new RuntimeException(
+                    'Pemilik Nota Pesanan tidak konsisten dengan pemilik transaksi.',
+                );
             }
             if (isset($notaBelanja[$belanjaId])) {
-                throw new RuntimeException('Backup memiliki lebih dari satu Nota Pesanan untuk transaksi yang sama.');
+                throw new RuntimeException(
+                    'Backup memiliki lebih dari satu Nota Pesanan untuk transaksi yang sama.',
+                );
             }
             $notaBelanja[$belanjaId] = true;
         }
@@ -416,9 +568,15 @@ class EncryptedBackupService
         $kwitansiBelanja = [];
         foreach ($tables['kwitansis'] as $row) {
             $belanjaId = (string) $row['belanja_id'];
-            $this->assertExists($belanjaIds, $belanjaId, 'Kwitansi mengacu ke transaksi yang tidak ada.');
+            $this->assertExists(
+                $belanjaIds,
+                $belanjaId,
+                'Kwitansi mengacu ke transaksi yang tidak ada.',
+            );
             if (isset($kwitansiBelanja[$belanjaId])) {
-                throw new RuntimeException('Backup memiliki lebih dari satu Kwitansi untuk transaksi yang sama.');
+                throw new RuntimeException(
+                    'Backup memiliki lebih dari satu Kwitansi untuk transaksi yang sama.',
+                );
             }
             $kwitansiBelanja[$belanjaId] = true;
         }
@@ -427,19 +585,40 @@ class EncryptedBackupService
         foreach ($tables['bapbs'] as $row) {
             $belanjaId = (string) $row['belanja_id'];
             $userId = (string) $row['user_id'];
-            $this->assertExists($belanjaIds, $belanjaId, 'BAPB mengacu ke transaksi yang tidak ada.');
-            $this->assertExists($userIds, $userId, 'BAPB mengacu ke user yang tidak ada.');
-            if (($belanjaOwner[$belanjaId] ?? null) !== $userId) {
-                throw new RuntimeException('Pemilik BAPB tidak konsisten dengan pemilik transaksi.');
+            $this->assertExists(
+                $belanjaIds,
+                $belanjaId,
+                'BAPB mengacu ke transaksi yang tidak ada.',
+            );
+            $this->assertExists(
+                $userIds,
+                $userId,
+                'BAPB mengacu ke user yang tidak ada.',
+            );
+            if (
+                ($belanjaOwner[$belanjaId] ?? null) !== $userId &&
+                (empty($userSchools[$userId]) ||
+                    (string) $userSchools[$userId] !==
+                        (string) ($belanjaSchools[$belanjaId] ?? ''))
+            ) {
+                throw new RuntimeException(
+                    'Pemilik BAPB tidak konsisten dengan pemilik transaksi.',
+                );
             }
             if (isset($bapbBelanja[$belanjaId])) {
-                throw new RuntimeException('Backup memiliki lebih dari satu BAPB untuk transaksi yang sama.');
+                throw new RuntimeException(
+                    'Backup memiliki lebih dari satu BAPB untuk transaksi yang sama.',
+                );
             }
             $bapbBelanja[$belanjaId] = true;
         }
 
         foreach ($tables['activity_logs'] as $row) {
-            $this->assertExists($userIds, (string) $row['user_id'], 'Activity Log mengacu ke user yang tidak ada.');
+            $this->assertExists(
+                $userIds,
+                (string) $row['user_id'],
+                'Activity Log mengacu ke user yang tidak ada.',
+            );
         }
     }
 
@@ -449,10 +628,14 @@ class EncryptedBackupService
         foreach ($rows as $row) {
             $id = (string) ($row['id'] ?? '');
             if ($id === '') {
-                throw new RuntimeException("Backup memiliki baris {$table} tanpa ID.");
+                throw new RuntimeException(
+                    "Backup memiliki baris {$table} tanpa ID.",
+                );
             }
             if (isset($ids[$id])) {
-                throw new RuntimeException("Backup memiliki ID ganda pada tabel {$table}.");
+                throw new RuntimeException(
+                    "Backup memiliki ID ganda pada tabel {$table}.",
+                );
             }
             $ids[$id] = true;
         }
@@ -462,19 +645,23 @@ class EncryptedBackupService
 
     private function assertExists(array $ids, string $id, string $message): void
     {
-        if (! isset($ids[$id])) {
+        if (!isset($ids[$id])) {
             throw new RuntimeException($message);
         }
     }
 
-    private function normalizeRowsForCurrentSchema(string $table, array $rows): array
-    {
+    private function normalizeRowsForCurrentSchema(
+        string $table,
+        array $rows,
+    ): array {
         $columns = array_fill_keys(Schema::getColumnListing($table), true);
 
         return array_map(function (array $row) use ($table, $columns): array {
             if ($table === 'users') {
                 $row['role'] = $row['role'] ?? 'user';
-                $row['is_active'] = array_key_exists('is_active', $row) ? (int) ((bool) $row['is_active']) : 1;
+                $row['is_active'] = array_key_exists('is_active', $row)
+                    ? (int) ((bool) $row['is_active'])
+                    : 1;
             }
 
             return array_intersect_key($row, $columns);
@@ -488,12 +675,12 @@ class EncryptedBackupService
         }
 
         foreach (self::TABLES as $table) {
-            if (! Schema::hasColumn($table, 'id')) {
+            if (!Schema::hasColumn($table, 'id')) {
                 continue;
             }
 
             DB::statement(
-                "SELECT setval(pg_get_serial_sequence('{$table}', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM {$table}"
+                "SELECT setval(pg_get_serial_sequence('{$table}', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM {$table}",
             );
         }
     }

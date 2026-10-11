@@ -10,6 +10,9 @@ use App\Models\Bapb;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
+use App\Models\SchoolProfile;
+use App\Support\Terbilang;
 
 class BelanjaController extends Controller
 {
@@ -17,56 +20,62 @@ class BelanjaController extends Controller
     {
         $user = Auth::user();
 
-        $query = Belanja::where('school_profile_id', $user->school_profile_id);
-
-        // filter pencarian
-        if ($request->q) {
-            $query->where(function ($q) use ($request) {
-                $q->where(
-                    'nomor_bukti',
-                    'like',
-                    '%' . $request->q . '%',
-                )->orWhere('uraian', 'like', '%' . $request->q . '%');
-            });
+        $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+            'kategori' => ['nullable', 'in:Barang,Jasa'],
+            'status' => ['nullable', 'in:lengkap,proses,belum'],
+            'tahun' => ['nullable', 'integer', 'between:1900,9999'],
+            'tahun_anggaran' => ['nullable', 'integer', 'between:1900,9999'],
+            'tanggal_mulai' => ['nullable', 'date_format:Y-m-d'],
+            'tanggal_selesai' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        $query = Belanja::where(
+            'school_profile_id',
+            $user->school_profile_id ?? 0,
+        );
+        if ($request->filled('q')) {
+            $query->where(
+                fn($q) => $q
+                    ->where('nomor_bukti', 'like', '%' . $request->q . '%')
+                    ->orWhere('uraian', 'like', '%' . $request->q . '%'),
+            );
         }
-
-        // filter kategori
-        if ($request->kategori) {
+        if ($request->filled('kategori')) {
             $query->where('kategori', $request->kategori);
         }
-
-        // FILTER TAHUN ANGGARAN
-        if ($request->tahun_anggaran) {
-            $query->where('tahun_anggaran', $request->tahun_anggaran);
+        if (
+            $year =
+                $request->input('tahun') ?: $request->input('tahun_anggaran')
+        ) {
+            $query->where('tahun_anggaran', $year);
         }
-
-        // filter tanggal
-        if ($request->tanggal_mulai) {
+        if ($request->filled('tanggal_mulai')) {
             $query->whereDate('tanggal', '>=', $request->tanggal_mulai);
         }
-
-        if ($request->tanggal_selesai) {
+        if ($request->filled('tanggal_selesai')) {
             $query->whereDate('tanggal', '<=', $request->tanggal_selesai);
         }
-
-        $query = Belanja::where('school_profile_id', $user->school_profile_id);
-
-        if (request('q')) {
-            $query->where(function ($q) {
-                $q->where(
-                    'nomor_bukti',
-                    'like',
-                    '%' . request('q') . '%',
-                )->orWhere('uraian', 'like', '%' . request('q') . '%');
-            });
-        }
-
-        if (request('kategori')) {
-            $query->where('kategori', request('kategori'));
-        }
-
-        if (request('tahun')) {
-            $query->where('tahun_anggaran', request('tahun'));
+        if ($request->status === 'lengkap') {
+            $query->has('notaPesanan')->has('kwitansi')->has('bapb');
+        } elseif ($request->status === 'belum') {
+            $query
+                ->doesntHave('notaPesanan')
+                ->doesntHave('kwitansi')
+                ->doesntHave('bapb');
+        } elseif ($request->status === 'proses') {
+            $query
+                ->where(
+                    fn($q) => $q
+                        ->has('notaPesanan')
+                        ->orHas('kwitansi')
+                        ->orHas('bapb'),
+                )
+                ->where(
+                    fn($q) => $q
+                        ->doesntHave('notaPesanan')
+                        ->orDoesntHave('kwitansi')
+                        ->orDoesntHave('bapb'),
+                );
         }
 
         $belanjas = $query->latest()->paginate(10)->withQueryString();
@@ -80,48 +89,20 @@ class BelanjaController extends Controller
         // total untuk tampilan filter
         $filteredTotal = $totalBelanja;
 
-        // hitung LPJ
-        $lpjLengkap = 0;
-        $lpjBelumLengkap = 0;
-
-        foreach ($belanjas as $belanja) {
-            $lengkap =
-                \App\Models\NotaPesanan::where(
-                    'belanja_id',
-                    $belanja->id,
-                )->exists() &&
-                \App\Models\Kwitansi::where(
-                    'belanja_id',
-                    $belanja->id,
-                )->exists() &&
-                \App\Models\Bapb::where('belanja_id', $belanja->id)->exists();
-
-            if ($lengkap) {
-                $lpjLengkap++;
-            } else {
-                $lpjBelumLengkap++;
-            }
-        }
-
-        $jumlahNota = \App\Models\NotaPesanan::whereIn(
-            'belanja_id',
-            $belanjas->getCollection()->pluck('id'),
-        )->count();
-
-        $jumlahKwitansi = \App\Models\Kwitansi::whereIn(
-            'belanja_id',
-            $belanjas->getCollection()->pluck('id'),
-        )->count();
-
-        $jumlahBapb = \App\Models\Bapb::whereIn(
-            'belanja_id',
-            $belanjas->getCollection()->pluck('id'),
-        )->count();
+        $lpjLengkap = (clone $query)
+            ->has('notaPesanan')
+            ->has('kwitansi')
+            ->has('bapb')
+            ->count();
+        $lpjBelumLengkap = $totalTransaksi - $lpjLengkap;
+        $jumlahNota = (clone $query)->has('notaPesanan')->count();
+        $jumlahKwitansi = (clone $query)->has('kwitansi')->count();
+        $jumlahBapb = (clone $query)->has('bapb')->count();
 
         // daftar tahun anggaran untuk filter
         $tahunAnggaran = Anggaran::where(
             'school_profile_id',
-            $user->school_profile_id,
+            $user->school_profile_id ?? 0,
         )
             ->orderBy('tahun', 'desc')
             ->pluck('tahun')
@@ -140,6 +121,7 @@ class BelanjaController extends Controller
         $hasFilters =
             !empty(request('q')) ||
             !empty(request('kategori')) ||
+            !empty(request('tahun')) ||
             !empty(request('tahun_anggaran')) ||
             !empty(request('status')) ||
             !empty(request('tanggal_mulai')) ||
@@ -147,7 +129,7 @@ class BelanjaController extends Controller
 
         $tahunAnggaran = Anggaran::where(
             'school_profile_id',
-            $user->school_profile_id,
+            $user->school_profile_id ?? 0,
         )
             ->orderBy('tahun', 'desc')
             ->pluck('tahun')
@@ -179,7 +161,7 @@ class BelanjaController extends Controller
 
         $tahunAnggaran = Anggaran::where(
             'school_profile_id',
-            $user->school_profile_id,
+            $user->school_profile_id ?? 0,
         )
             ->orderBy('tahun', 'desc')
             ->pluck('tahun')
@@ -191,85 +173,96 @@ class BelanjaController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'tahun_anggaran' => 'required',
+        return DB::transaction(function () use ($request) {
+            SchoolProfile::whereKey(Auth::user()->school_profile_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $validated = $request->validate([
+                'tahun_anggaran' => 'required|integer|between:1900,9999',
 
-            'tanggal' => 'required|date',
+                'tanggal' => 'required|date',
 
-            'nomor_bukti' => 'required',
+                'nomor_bukti' => 'required|string|max:255',
 
-            'uraian' => 'required',
+                'uraian' => 'required|string|max:255',
 
-            'kategori' => ['required', Rule::in(['Barang', 'Jasa'])],
+                'kategori' => ['required', Rule::in(['Barang', 'Jasa'])],
 
-            'jumlah' => 'required|integer|min:1',
+                'jumlah' => 'required|integer|min:1|max:1000000',
 
-            'harga_satuan' => 'required|integer|min:0',
-        ]);
+                'harga_satuan' => 'required|integer|min:0|max:1000000000',
+            ]);
 
-        $user = Auth::user();
+            $user = Auth::user();
 
-        // cek sisa anggaran tahun berjalan
+            // cek sisa anggaran tahun berjalan
 
-        $anggaran = Anggaran::where(
-            'school_profile_id',
-            $user->school_profile_id,
-        )
-            ->where('tahun', $validated['tahun_anggaran'])
-            ->first();
+            $anggaran = Anggaran::where(
+                'school_profile_id',
+                $user->school_profile_id ?? 0,
+            )
+                ->where('tahun', $validated['tahun_anggaran'])
+                ->first();
 
-        if (!$anggaran) {
-            return back()
-                ->withInput()
-                ->with('error', 'Tahun anggaran belum tersedia.');
-        }
+            if (!$anggaran) {
+                return back()
+                    ->withInput()
+                    ->with('error', 'Tahun anggaran belum tersedia.');
+            }
 
-        $totalTerpakai = Belanja::where(
-            'school_profile_id',
-            $user->school_profile_id,
-        )
-            ->where('tahun_anggaran', $validated['tahun_anggaran'])
-            ->sum('total');
+            $totalTerpakai = Belanja::where(
+                'school_profile_id',
+                $user->school_profile_id ?? 0,
+            )
+                ->where('tahun_anggaran', $validated['tahun_anggaran'])
+                ->sum('total');
 
-        $totalBaru = $validated['jumlah'] * $validated['harga_satuan'];
+            $totalBaru = $validated['jumlah'] * $validated['harga_satuan'];
+            if ($totalBaru > 2147483647) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'harga_satuan' =>
+                        'Total transaksi melebihi batas kolom database (Rp 2.147.483.647).',
+                ]);
+            }
 
-        $sisaAnggaran = $anggaran->jumlah - $totalTerpakai;
+            $sisaAnggaran = $anggaran->jumlah - $totalTerpakai;
 
-        if ($totalBaru > $sisaAnggaran) {
-            return back()
-                ->withInput()
-                ->with(
-                    'error',
-                    'Belanja melebihi sisa anggaran. Sisa tersedia Rp ' .
-                        number_format($sisaAnggaran, 0, ',', '.'),
-                );
-        }
+            if ($totalBaru > $sisaAnggaran) {
+                return back()
+                    ->withInput()
+                    ->with(
+                        'error',
+                        'Belanja melebihi sisa anggaran. Sisa tersedia Rp ' .
+                            number_format($sisaAnggaran, 0, ',', '.'),
+                    );
+            }
 
-        Belanja::create([
-            'user_id' => $user->id,
+            Belanja::create([
+                'user_id' => $user->id,
 
-            'school_profile_id' => $user->school_profile_id,
+                'school_profile_id' => $user->school_profile_id ?? 0,
 
-            'tanggal' => $validated['tanggal'],
+                'tanggal' => $validated['tanggal'],
 
-            'tahun_anggaran' => $validated['tahun_anggaran'],
+                'tahun_anggaran' => $validated['tahun_anggaran'],
 
-            'nomor_bukti' => $validated['nomor_bukti'],
+                'nomor_bukti' => $validated['nomor_bukti'],
 
-            'uraian' => $validated['uraian'],
+                'uraian' => $validated['uraian'],
 
-            'kategori' => $validated['kategori'],
+                'kategori' => $validated['kategori'],
 
-            'jumlah' => $validated['jumlah'],
+                'jumlah' => $validated['jumlah'],
 
-            'harga_satuan' => $validated['harga_satuan'],
+                'harga_satuan' => $validated['harga_satuan'],
 
-            'total' => $validated['jumlah'] * $validated['harga_satuan'],
-        ]);
+                'total' => $validated['jumlah'] * $validated['harga_satuan'],
+            ]);
 
-        return redirect()
-            ->route('belanja.index')
-            ->with('success', 'Data belanja berhasil disimpan');
+            return redirect()
+                ->route('belanja.index')
+                ->with('success', 'Data belanja berhasil disimpan');
+        });
     }
 
     public function edit($id)
@@ -278,12 +271,12 @@ class BelanjaController extends Controller
 
         $belanja = Belanja::where(
             'school_profile_id',
-            $user->school_profile_id,
+            $user->school_profile_id ?? 0,
         )->findOrFail($id);
 
         $tahunAnggaran = Anggaran::where(
             'school_profile_id',
-            $user->school_profile_id,
+            $user->school_profile_id ?? 0,
         )
             ->orderBy('tahun', 'desc')
             ->pluck('tahun')
@@ -295,83 +288,102 @@ class BelanjaController extends Controller
 
     public function update(Request $request, $id)
     {
-        $user = Auth::user();
+        return DB::transaction(function () use ($request, $id) {
+            SchoolProfile::whereKey(Auth::user()->school_profile_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $user = Auth::user();
 
-        $validated = $request->validate([
-            'tahun_anggaran' => 'required',
+            $validated = $request->validate([
+                'tahun_anggaran' => 'required|integer|between:1900,9999',
 
-            'tanggal' => 'required|date',
+                'tanggal' => 'required|date',
 
-            'nomor_bukti' => 'required',
+                'nomor_bukti' => 'required|string|max:255',
 
-            'uraian' => 'required',
+                'uraian' => 'required|string|max:255',
 
-            'kategori' => ['required', Rule::in(['Barang', 'Jasa'])],
+                'kategori' => ['required', Rule::in(['Barang', 'Jasa'])],
 
-            'jumlah' => 'required|integer|min:1',
+                'jumlah' => 'required|integer|min:1|max:1000000',
 
-            'harga_satuan' => 'required|integer|min:0',
-        ]);
+                'harga_satuan' => 'required|integer|min:0|max:1000000000',
+            ]);
 
-        $belanja = Belanja::where(
-            'school_profile_id',
-            $user->school_profile_id,
-        )->findOrFail($id);
+            $belanja = Belanja::where(
+                'school_profile_id',
+                $user->school_profile_id ?? 0,
+            )->findOrFail($id);
 
-        $anggaran = Anggaran::where(
-            'school_profile_id',
-            $user->school_profile_id,
-        )
-            ->where('tahun', $validated['tahun_anggaran'])
-            ->first();
+            $anggaran = Anggaran::where(
+                'school_profile_id',
+                $user->school_profile_id ?? 0,
+            )
+                ->where('tahun', $validated['tahun_anggaran'])
+                ->first();
 
-        if (!$anggaran) {
-            return back()
-                ->withInput()
-                ->with('error', 'Tahun anggaran belum tersedia.');
-        }
+            if (!$anggaran) {
+                return back()
+                    ->withInput()
+                    ->with('error', 'Tahun anggaran belum tersedia.');
+            }
 
-        // total belanja lain (tidak menghitung data yang sedang diedit)
+            // total belanja lain (tidak menghitung data yang sedang diedit)
 
-        $totalTerpakai = Belanja::where(
-            'school_profile_id',
-            $user->school_profile_id,
-        )
-            ->where('tahun_anggaran', $validated['tahun_anggaran'])
-            ->where('id', '!=', $id)
-            ->sum('total');
+            $totalTerpakai = Belanja::where(
+                'school_profile_id',
+                $user->school_profile_id ?? 0,
+            )
+                ->where('tahun_anggaran', $validated['tahun_anggaran'])
+                ->where('id', '!=', $id)
+                ->sum('total');
 
-        $totalBaru = $validated['jumlah'] * $validated['harga_satuan'];
+            $totalBaru = $validated['jumlah'] * $validated['harga_satuan'];
+            if ($totalBaru > 2147483647) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'harga_satuan' =>
+                        'Total transaksi melebihi batas kolom database (Rp 2.147.483.647).',
+                ]);
+            }
 
-        $sisaAnggaran = $anggaran->jumlah - $totalTerpakai;
+            $sisaAnggaran = $anggaran->jumlah - $totalTerpakai;
 
-        if ($totalBaru > $sisaAnggaran) {
-            return back()
-                ->withInput()
-                ->with('error', 'Perubahan melebihi sisa anggaran.');
-        }
+            if ($totalBaru > $sisaAnggaran) {
+                return back()
+                    ->withInput()
+                    ->with('error', 'Perubahan melebihi sisa anggaran.');
+            }
 
-        $belanja->update([
-            'tanggal' => $validated['tanggal'],
+            $belanja->update([
+                'tanggal' => $validated['tanggal'],
 
-            'tahun_anggaran' => $validated['tahun_anggaran'],
+                'tahun_anggaran' => $validated['tahun_anggaran'],
 
-            'nomor_bukti' => $validated['nomor_bukti'],
+                'nomor_bukti' => $validated['nomor_bukti'],
 
-            'uraian' => $validated['uraian'],
+                'uraian' => $validated['uraian'],
 
-            'kategori' => $validated['kategori'],
+                'kategori' => $validated['kategori'],
 
-            'jumlah' => $validated['jumlah'],
+                'jumlah' => $validated['jumlah'],
 
-            'harga_satuan' => $validated['harga_satuan'],
+                'harga_satuan' => $validated['harga_satuan'],
 
-            'total' => $validated['jumlah'] * $validated['harga_satuan'],
-        ]);
+                'total' => $validated['jumlah'] * $validated['harga_satuan'],
+            ]);
 
-        return redirect()
-            ->route('belanja.index')
-            ->with('success', 'Data belanja berhasil diperbarui');
+            // Kwitansi harus tetap sesuai nilai transaksi yang baru.
+            if ($kwitansi = $belanja->kwitansi) {
+                $kwitansi->update([
+                    'jumlah_uang' => $belanja->total,
+                    'terbilang' => Terbilang::rupiah((int) $belanja->total),
+                ]);
+            }
+
+            return redirect()
+                ->route('belanja.index')
+                ->with('success', 'Data belanja berhasil diperbarui');
+        });
     }
 
     public function destroy($id)
@@ -380,7 +392,7 @@ class BelanjaController extends Controller
 
         $belanja = Belanja::where(
             'school_profile_id',
-            $user->school_profile_id,
+            $user->school_profile_id ?? 0,
         )->findOrFail($id);
 
         $belanja->delete();

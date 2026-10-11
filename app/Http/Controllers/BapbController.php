@@ -14,16 +14,27 @@ class BapbController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Bapb::with(['belanja.notaPesanan', 'belanja.kwitansi'])
-            ->where('user_id', auth()->id());
+        $query = Bapb::with([
+            'belanja.notaPesanan',
+            'belanja.kwitansi',
+        ])->whereHas(
+            'belanja',
+            fn($q) => $q->where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            ),
+        );
 
         if ($request->filled('q')) {
             $search = trim((string) $request->q);
             $query->where(function ($q) use ($search) {
                 $q->where('nomor_bapb', 'like', "%{$search}%")
                     ->orWhere('keterangan', 'like', "%{$search}%")
-                    ->orWhereHas('belanja', function ($belanjaQuery) use ($search) {
-                        $belanjaQuery->where('uraian', 'like', "%{$search}%")
+                    ->orWhereHas('belanja', function ($belanjaQuery) use (
+                        $search,
+                    ) {
+                        $belanjaQuery
+                            ->where('uraian', 'like', "%{$search}%")
                             ->orWhere('nomor_bukti', 'like', "%{$search}%");
                     });
             });
@@ -31,7 +42,13 @@ class BapbController extends Controller
 
         if ($request->filled('hasil')) {
             $request->validate([
-                'hasil' => [Rule::in(['Baik dan sesuai', 'Baik, terdapat catatan', 'Tidak sesuai'])],
+                'hasil' => [
+                    Rule::in([
+                        'Baik dan sesuai',
+                        'Baik, terdapat catatan',
+                        'Tidak sesuai',
+                    ]),
+                ],
             ]);
             $query->where('hasil_pemeriksaan', $request->hasil);
         }
@@ -50,34 +67,66 @@ class BapbController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $base = Bapb::where('user_id', auth()->id());
+        $base = Bapb::whereHas(
+            'belanja',
+            fn($q) => $q->where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            ),
+        );
         $totalBapb = (clone $base)->count();
-        $sesuai = (clone $base)->where('hasil_pemeriksaan', 'Baik dan sesuai')->count();
-        $denganCatatan = (clone $base)->where('hasil_pemeriksaan', 'Baik, terdapat catatan')->count();
-        $tidakSesuai = (clone $base)->where('hasil_pemeriksaan', 'Tidak sesuai')->count();
+        $sesuai = (clone $base)
+            ->where('hasil_pemeriksaan', 'Baik dan sesuai')
+            ->count();
+        $denganCatatan = (clone $base)
+            ->where('hasil_pemeriksaan', 'Baik, terdapat catatan')
+            ->count();
+        $tidakSesuai = (clone $base)
+            ->where('hasil_pemeriksaan', 'Tidak sesuai')
+            ->count();
 
-        return view('bapb.index', compact('bapbs', 'totalBapb', 'sesuai', 'denganCatatan', 'tidakSesuai'));
+        return view(
+            'bapb.index',
+            compact(
+                'bapbs',
+                'totalBapb',
+                'sesuai',
+                'denganCatatan',
+                'tidakSesuai',
+            ),
+        );
     }
 
     public function create($id)
     {
-        $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
-            ->findOrFail($id);
+        $belanja = Belanja::where(
+            'school_profile_id',
+            auth()->user()->school_profile_id ?? 0,
+        )->findOrFail($id);
 
         $bapbAda = Bapb::where('belanja_id', $belanja->id)
-            ->where('user_id', auth()->id())
+            ->whereHas(
+                'belanja',
+                fn($q) => $q->where(
+                    'school_profile_id',
+                    auth()->user()->school_profile_id ?? 0,
+                ),
+            )
             ->first();
 
         if ($bapbAda) {
             return redirect()->route('bapb.show', $bapbAda->id);
         }
 
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $school = auth()->user()->schoolProfile;
 
         if (!$school) {
             return redirect()
                 ->route('school-profile.create')
-                ->with('error', 'Lengkapi profil sekolah sebelum membuat BAPB.');
+                ->with(
+                    'error',
+                    'Lengkapi profil sekolah sebelum membuat BAPB.',
+                );
         }
 
         $nomorBapb = $this->nextNomorBapb();
@@ -90,24 +139,43 @@ class BapbController extends Controller
         $validated = $request->validate([
             'belanja_id' => ['required', 'integer'],
             'tanggal_bapb' => ['required', 'date'],
-            'hasil_pemeriksaan' => ['required', Rule::in(['Baik dan sesuai', 'Baik, terdapat catatan', 'Tidak sesuai'])],
+            'hasil_pemeriksaan' => [
+                'required',
+                Rule::in([
+                    'Baik dan sesuai',
+                    'Baik, terdapat catatan',
+                    'Tidak sesuai',
+                ]),
+            ],
             'keterangan' => ['nullable', 'string', 'max:2000'],
         ]);
 
         return DB::transaction(function () use ($validated) {
             User::whereKey(auth()->id())->lockForUpdate()->firstOrFail();
 
-            $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+            $belanja = Belanja::where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            )
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
 
-            if (!SchoolProfile::where('user_id', auth()->id())->exists()) {
+            if (!auth()->user()->schoolProfile()->exists()) {
                 return redirect()
                     ->route('school-profile.create')
-                    ->with('error', 'Lengkapi profil sekolah sebelum membuat BAPB.');
+                    ->with(
+                        'error',
+                        'Lengkapi profil sekolah sebelum membuat BAPB.',
+                    );
             }
 
-            $bapbAda = Bapb::where('user_id', auth()->id())
+            $bapbAda = Bapb::whereHas(
+                'belanja',
+                fn($q) => $q->where(
+                    'school_profile_id',
+                    auth()->user()->school_profile_id ?? 0,
+                ),
+            )
                 ->where('belanja_id', $belanja->id)
                 ->first();
 
@@ -137,10 +205,16 @@ class BapbController extends Controller
             'belanja.kwitansi',
             'belanja.bapb',
         ])
-            ->where('user_id', auth()->id())
+            ->whereHas(
+                'belanja',
+                fn($q) => $q->where(
+                    'school_profile_id',
+                    auth()->user()->school_profile_id ?? 0,
+                ),
+            )
             ->findOrFail($id);
 
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $school = auth()->user()->schoolProfile;
 
         return view('bapb.show', compact('bapb', 'school'));
     }
@@ -150,7 +224,8 @@ class BapbController extends Controller
         $urutan = Bapb::where('user_id', auth()->id())->count() + 1;
 
         do {
-            $nomorBapb = 'BAPB-' . str_pad((string) $urutan, 3, '0', STR_PAD_LEFT);
+            $nomorBapb =
+                'BAPB-' . str_pad((string) $urutan, 3, '0', STR_PAD_LEFT);
             $sudahAda = Bapb::where('user_id', auth()->id())
                 ->where('nomor_bapb', $nomorBapb)
                 ->exists();

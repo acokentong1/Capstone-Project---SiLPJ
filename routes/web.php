@@ -38,7 +38,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         'profile.destroy',
     );
 
-    Route::resource('belanja', BelanjaController::class)->except(['show'])
+    Route::resource('belanja', BelanjaController::class)
+        ->except(['show'])
         ->middleware('role:admin,bendahara');
 
     Route::get('/nota-pesanan', [NotaPesananController::class, 'index'])->name(
@@ -177,43 +178,30 @@ Route::middleware(['auth', 'active'])->group(function () {
                 'index',
             ])->name('rekap.index');
         });
-    Route::middleware(['auth', 'active'])->group(function () {
-        Route::get('/rekap-keuangan', [RekapController::class, 'index'])->name(
-            'rekap.index',
-        );
-        Route::get('/rekap-keuangan', [RekapController::class, 'index'])
-            ->middleware(['auth', 'active'])
-            ->name('rekap.index');
-        Route::get('/rekap-keuangan/export', [
-            RekapController::class,
-            'export',
-        ])->name('rekap.export');
-        Route::get('/rekap-keuangan', [RekapController::class, 'index'])
-            ->middleware(['auth', 'active'])
-            ->name('rekap.index');
+    Route::get('/rekap-keuangan', [RekapController::class, 'index'])->name(
+        'rekap.index',
+    );
+    Route::get('/rekap-keuangan/export', [
+        RekapExportController::class,
+        'excel',
+    ])->name('rekap.export');
+    Route::get('/rekap-keuangan/export-excel', [
+        RekapExportController::class,
+        'excel',
+    ])->name('rekap.export.excel');
+    Route::get('/rekap-keuangan/export-pdf', [
+        RekapPdfController::class,
+        'pdf',
+    ])->name('rekap.export.pdf');
 
-        Route::get('/rekap-keuangan/export-excel', [
-            RekapExportController::class,
-            'excel',
-        ])->name('rekap.export.excel');
+    Route::resource('anggaran', AnggaranController::class)
+        ->only(['index', 'create', 'store'])
+        ->middleware('role:admin,bendahara');
 
-        Route::get('/rekap-keuangan/export-pdf', [
-            RekapPdfController::class,
-            'pdf',
-        ]);
-
-        Route::resource('anggaran', AnggaranController::class)->except([
-            'show',
-        ])->middleware('role:admin,bendahara');
-
-        Route::get('/anggaran/create', [
-            AnggaranController::class,
-            'create',
-        ])->middleware('role:admin,bendahara')->name('anggaran.create');
-        Route::post('/anggaran', [AnggaranController::class, 'store'])
-            ->middleware('role:admin,bendahara')
-            ->name('anggaran.store');
-    });
+    Route::get('/laporan-lpj/export-excel', [
+        LaporanLpjController::class,
+        'exportExcel',
+    ])->name('laporan-lpj.excel');
 });
 
 require __DIR__ . '/auth.php';

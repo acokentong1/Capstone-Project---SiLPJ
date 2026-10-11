@@ -1,1 +1,17 @@
-<x-app-layout><div class="p-6"><form method="POST" action="{{route('anggaran.update',$anggaran)}}">@csrf @method('PUT')<input class="border block" name="tahun" value="{{$anggaran->tahun}}"><input class="border block" name="jumlah" value="{{$anggaran->jumlah}}"><button>Update</button></form></div></x-app-layout>
+<x-app-layout
+    ><div class="p-6">
+        <form method="POST" action="{{route('anggaran.update',$anggaran)}}">
+            @csrf
+            @method ('PUT')
+            <input
+                class="border block"
+                name="tahun"
+                value="{{$anggaran->tahun}}"
+            /><input
+                class="border block"
+                name="jumlah"
+                value="{{$anggaran->jumlah}}"
+            /><button>Update</button>
+        </form>
+    </div></x-app-layout
+>

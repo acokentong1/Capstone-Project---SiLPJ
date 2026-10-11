@@ -31,17 +31,12 @@ class DashboardController extends Controller
 
         if ($user) {
             // Ambil berdasarkan school_profile_id milik user
-            if ($user->school_profile_id) {
-                $school = SchoolProfile::find($user->school_profile_id);
-            }
-
-            // fallback terakhir
-            if (!$school) {
-                $school = SchoolProfile::first();
+            if ($user->school_profile_id ?? 0) {
+                $school = SchoolProfile::find($user->school_profile_id ?? 0);
             }
         }
 
-        $schoolId = $school ? $school->id : null;
+        $schoolId = $school ? $school->id : 0;
 
         /*
         |--------------------------------------------------------------------------

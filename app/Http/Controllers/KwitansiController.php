@@ -13,8 +13,10 @@ class KwitansiController extends Controller
 {
     public function create($id)
     {
-        $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
-            ->findOrFail($id);
+        $belanja = Belanja::where(
+            'school_profile_id',
+            auth()->user()->school_profile_id ?? 0,
+        )->findOrFail($id);
 
         $kwitansiAda = Kwitansi::where('belanja_id', $belanja->id)->first();
 
@@ -22,18 +24,24 @@ class KwitansiController extends Controller
             return redirect()->route('kwitansi.show', $kwitansiAda->id);
         }
 
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $school = auth()->user()->schoolProfile;
 
         if (!$school) {
             return redirect()
                 ->route('school-profile.create')
-                ->with('error', 'Lengkapi profil sekolah sebelum membuat Kwitansi.');
+                ->with(
+                    'error',
+                    'Lengkapi profil sekolah sebelum membuat Kwitansi.',
+                );
         }
 
         $nomorKwitansi = $this->generateNomorKwitansi($belanja);
         $terbilang = Terbilang::rupiah((int) $belanja->total);
 
-        return view('kwitansi.create', compact('belanja', 'nomorKwitansi', 'terbilang', 'school'));
+        return view(
+            'kwitansi.create',
+            compact('belanja', 'nomorKwitansi', 'terbilang', 'school'),
+        );
     }
 
     public function store(Request $request)
@@ -44,14 +52,20 @@ class KwitansiController extends Controller
         ]);
 
         return DB::transaction(function () use ($validated) {
-            $belanja = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+            $belanja = Belanja::where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            )
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
 
-            if (!SchoolProfile::where('user_id', auth()->id())->exists()) {
+            if (!auth()->user()->schoolProfile()->exists()) {
                 return redirect()
                     ->route('school-profile.create')
-                    ->with('error', 'Lengkapi profil sekolah sebelum membuat Kwitansi.');
+                    ->with(
+                        'error',
+                        'Lengkapi profil sekolah sebelum membuat Kwitansi.',
+                    );
             }
 
             $kwitansiAda = Kwitansi::where('belanja_id', $belanja->id)->first();
@@ -77,18 +91,26 @@ class KwitansiController extends Controller
 
     public function index(Request $request)
     {
-        $query = Kwitansi::with(['belanja.notaPesanan', 'belanja.bapb'])
-            ->whereHas('belanja', function ($query) {
-                $query->where('user_id', auth()->id());
-            });
+        $query = Kwitansi::with([
+            'belanja.notaPesanan',
+            'belanja.bapb',
+        ])->whereHas('belanja', function ($query) {
+            $query->where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            );
+        });
 
         if ($request->filled('q')) {
             $search = trim((string) $request->q);
             $query->where(function ($q) use ($search) {
                 $q->where('nomor_kwitansi', 'like', "%{$search}%")
                     ->orWhere('penerima', 'like', "%{$search}%")
-                    ->orWhereHas('belanja', function ($belanjaQuery) use ($search) {
-                        $belanjaQuery->where('uraian', 'like', "%{$search}%")
+                    ->orWhereHas('belanja', function ($belanjaQuery) use (
+                        $search,
+                    ) {
+                        $belanjaQuery
+                            ->where('uraian', 'like', "%{$search}%")
                             ->orWhere('nomor_bukti', 'like', "%{$search}%");
                     });
             });
@@ -99,7 +121,11 @@ class KwitansiController extends Controller
         }
 
         if ($request->filled('tanggal_sampai')) {
-            $query->whereDate('tanggal_kwitansi', '<=', $request->tanggal_sampai);
+            $query->whereDate(
+                'tanggal_kwitansi',
+                '<=',
+                $request->tanggal_sampai,
+            );
         }
 
         $kwitansi = $query
@@ -109,18 +135,32 @@ class KwitansiController extends Controller
             ->withQueryString();
 
         $base = Kwitansi::whereHas('belanja', function ($query) {
-            $query->where('user_id', auth()->id());
+            $query->where(
+                'school_profile_id',
+                auth()->user()->school_profile_id ?? 0,
+            );
         });
 
         $totalKwitansi = (clone $base)->count();
         $totalNilai = (clone $base)->sum('jumlah_uang');
-        $kwitansiLengkap = Belanja::where('school_profile_id', auth()->user()->school_profile_id)
+        $kwitansiLengkap = Belanja::where(
+            'school_profile_id',
+            auth()->user()->school_profile_id ?? 0,
+        )
             ->whereHas('notaPesanan')
             ->whereHas('kwitansi')
             ->whereHas('bapb')
             ->count();
 
-        return view('kwitansi.index', compact('kwitansi', 'totalKwitansi', 'totalNilai', 'kwitansiLengkap'));
+        return view(
+            'kwitansi.index',
+            compact(
+                'kwitansi',
+                'totalKwitansi',
+                'totalNilai',
+                'kwitansiLengkap',
+            ),
+        );
     }
 
     public function show($id)
@@ -131,11 +171,14 @@ class KwitansiController extends Controller
             'belanja.bapb',
         ])
             ->whereHas('belanja', function ($query) {
-                $query->where('user_id', auth()->id());
+                $query->where(
+                    'school_profile_id',
+                    auth()->user()->school_profile_id ?? 0,
+                );
             })
             ->findOrFail($id);
 
-        $school = SchoolProfile::where('user_id', auth()->id())->first();
+        $school = auth()->user()->schoolProfile;
 
         return view('kwitansi.show', compact('kwitansi', 'school'));
     }

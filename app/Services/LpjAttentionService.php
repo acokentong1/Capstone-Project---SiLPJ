@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Belanja;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
 class LpjAttentionService
@@ -10,7 +11,10 @@ class LpjAttentionService
     public function incompleteQuery(int $userId): Builder
     {
         return Belanja::query()
-            ->where('user_id', $userId)
+            ->where(
+                'school_profile_id',
+                User::find($userId)?->school_profile_id ?? 0,
+            )
             ->where(function (Builder $query): void {
                 $query
                     ->whereDoesntHave('notaPesanan')
@@ -34,11 +38,30 @@ class LpjAttentionService
 
         return [
             'total' => (clone $base)->count(),
-            'age_7_plus' => (clone $base)->whereDate('tanggal', '<=', $sevenDaysAgo)->count(),
-            'age_14_plus' => (clone $base)->whereDate('tanggal', '<=', $fourteenDaysAgo)->count(),
-            'missing_nota' => Belanja::where('user_id', $userId)->whereDoesntHave('notaPesanan')->count(),
-            'missing_kwitansi' => Belanja::where('user_id', $userId)->whereDoesntHave('kwitansi')->count(),
-            'missing_bapb' => Belanja::where('user_id', $userId)->whereDoesntHave('bapb')->count(),
+            'age_7_plus' => (clone $base)
+                ->whereDate('tanggal', '<=', $sevenDaysAgo)
+                ->count(),
+            'age_14_plus' => (clone $base)
+                ->whereDate('tanggal', '<=', $fourteenDaysAgo)
+                ->count(),
+            'missing_nota' => Belanja::where(
+                'school_profile_id',
+                User::find($userId)?->school_profile_id ?? 0,
+            )
+                ->whereDoesntHave('notaPesanan')
+                ->count(),
+            'missing_kwitansi' => Belanja::where(
+                'school_profile_id',
+                User::find($userId)?->school_profile_id ?? 0,
+            )
+                ->whereDoesntHave('kwitansi')
+                ->count(),
+            'missing_bapb' => Belanja::where(
+                'school_profile_id',
+                User::find($userId)?->school_profile_id ?? 0,
+            )
+                ->whereDoesntHave('bapb')
+                ->count(),
         ];
     }
 }
