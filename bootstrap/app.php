@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             SecurityHeaders::class,
+            \App\Http\Middleware\RedirectToInitialSetup::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

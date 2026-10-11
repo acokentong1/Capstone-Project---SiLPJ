@@ -8,6 +8,7 @@
 </head>
 <body>
 @include('partials.app-navigation')
+@include('documents._delete-errors')
 <header class="header">
     <div class="header-inner">
         <div class="brand"><h1>Kwitansi</h1><p>Kelola bukti penerimaan pembayaran untuk setiap transaksi belanja.</p></div>
@@ -51,10 +52,18 @@
                         <td class="right nowrap">Rp {{ number_format($item->jumlah_uang,0,',','.') }}</td>
                         <td><span class="badge {{ $docCount === 3 ? 'badge-success' : 'badge-warning' }}">{{ $docCount }}/3 dokumen</span></td>
                         <td><div class="row-actions">
+@if($item->belanja && !$item->belanja->isEditable())
+    @include('documents._locked-action', ['lockedBelanjaId'=>$item->belanja_id])
+@else
+
                             <a class="action-link done" href="{{ route('kwitansi.show',$item->id) }}">Lihat / Cetak</a>
+@include('documents._delete-action', ['document'=>$item, 'documentKind'=>'kwitansi', 'documentLabel'=>'Kwitansi'])
+
                             @if($item->belanja?->notaPesanan)<a class="action-link done" href="{{ route('nota-pesanan.show',$item->belanja->notaPesanan->id) }}">Nota ✓</a>@else<a class="action-link create" href="{{ route('nota-pesanan.create',$item->belanja_id) }}">+ Nota</a>@endif
                             @if($item->belanja?->bapb)<a class="action-link done" href="{{ route('bapb.show',$item->belanja->bapb->id) }}">BAPB ✓</a>@else<a class="action-link create" href="{{ route('bapb.create',$item->belanja_id) }}">+ BAPB</a>@endif
-                        </div></td>
+                        
+@endif
+</div></td>
                     </tr>
                 @empty
                     <tr><td colspan="8" class="empty-state"><div class="empty-title">Belum ada Kwitansi</div>Buat Kwitansi dari halaman Data Belanja.</td></tr>

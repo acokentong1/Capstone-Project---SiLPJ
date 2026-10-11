@@ -12,6 +12,87 @@ use Illuminate\View\View;
 
 class UserManagementController extends Controller
 {
+    public function create(Request $request): View
+    {
+        $schools = \App\Models\SchoolProfile::orderBy('nama_sekolah')->get();
+        $selectedSchool = $request->user()->school_profile_id;
+        if (!$selectedSchool && $schools->count() === 1) {
+            $selectedSchool = $schools->first()->id;
+        }
+        return view('admin.users.create', compact('schools', 'selectedSchool'));
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'role' => ['required', 'in:admin,bendahara,kepala_sekolah,user'],
+            'school_profile_id' => ['required', 'integer', 'exists:school_profiles,id'],
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::min(8)],
+        ]);
+        $user = DB::transaction(function () use ($request, $data) {
+            $user = new User();
+            $user->forceFill([
+                'name' => $data['name'], 'email' => $data['email'],
+                'password' => $data['password'], 'role' => $data['role'],
+                'school_profile_id' => $data['school_profile_id'], 'is_active' => true,
+            ])->save();
+            ActivityLogger::record($request->user()->id, 'admin', 'Membuat akun '.$user->email, $user, [
+                'role' => $user->role, 'school_profile_id' => $user->school_profile_id,
+            ]);
+            return $user;
+        });
+        return redirect()->route('admin.users.show', $user)->with('success', 'Akun berhasil dibuat dan terhubung ke sekolah. Sampaikan kata sandi secara pribadi kepada pemilik akun.');
+    }
+
+    public function edit(User $user): View
+    {
+        return view('admin.users.edit', compact('user'));
+    }
+
+    public function update(Request $request, User $user): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)],
+        ]);
+        DB::transaction(function () use ($request, $user, $data) {
+            $target = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if ($target->email !== $data['email']) {
+                $target->email_verified_at = null;
+            }
+            $target->fill($data)->save();
+            ActivityLogger::record($request->user()->id, 'admin', 'Mengubah identitas akun '.$target->email, $target);
+        });
+        return redirect()->route('admin.users.show', $user)->with('success', 'Identitas akun berhasil diperbarui.');
+    }
+
+    public function resetPassword(Request $request, User $user): RedirectResponse
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::min(8)],
+        ]);
+        DB::transaction(function () use ($request, $user, $data) {
+            $target = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $target->forceFill([
+                'password' => $data['password'],
+                'remember_token' => \Illuminate\Support\Str::random(60),
+            ])->save();
+            DB::table('sessions')->where('user_id', $target->id)->delete();
+            DB::table('password_reset_tokens')->where('email', $target->email)->delete();
+            ActivityLogger::record($request->user()->id, 'admin', 'Mereset kata sandi akun '.$target->email, $target);
+        });
+        if ($request->user()->is($user)) {
+            \Illuminate\Support\Facades\Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return redirect()->route('login')->with('status', 'Kata sandi diperbarui. Masuk kembali dengan kata sandi baru.');
+        }
+        return back()->with('success', 'Kata sandi diperbarui. Sampaikan kata sandi baru secara pribadi kepada pemilik akun.');
+    }
+
     public function index(Request $request): View
     {
         $filters = [

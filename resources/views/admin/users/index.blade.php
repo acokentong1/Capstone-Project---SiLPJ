@@ -15,6 +15,7 @@
     <div class="head">
         <div>
             <h1>Manajemen User</h1>
+<a class="btn primary" href="{{ route('admin.users.create') }}">+ Tambah Akun</a>
             <p>Kelola role dan status akun tanpa menghapus data transaksi sekolah.</p>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><a class="btn btn-light" href="{{ route('admin.backups.index') }}">Backup Database</a><div class="admin-badge">Area Administrator</div></div>

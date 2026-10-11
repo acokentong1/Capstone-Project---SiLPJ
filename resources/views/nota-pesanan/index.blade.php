@@ -8,6 +8,7 @@
 </head>
 <body>
 @include('partials.app-navigation')
+@include('documents._delete-errors')
 <header class="header">
     <div class="header-inner">
         <div class="brand">
@@ -108,7 +109,13 @@
                         </td>
                         <td>
                             <div class="row-actions">
+@if($nota->belanja && !$nota->belanja->isEditable())
+    @include('documents._locked-action', ['lockedBelanjaId'=>$nota->belanja_id])
+@else
+
                                 <a class="action-link done" href="{{ route('nota-pesanan.show', $nota->id) }}">Lihat / Cetak</a>
+@include('documents._delete-action', ['document'=>$nota, 'documentKind'=>'nota-pesanan', 'documentLabel'=>'Nota Pesanan'])
+
                                 @if($nota->belanja?->kwitansi)
                                     <a class="action-link done" href="{{ route('kwitansi.show', $nota->belanja->kwitansi->id) }}">Kwitansi ✓</a>
                                 @else
@@ -119,7 +126,9 @@
                                 @else
                                     <a class="action-link create" href="{{ route('bapb.create', $nota->belanja_id) }}">+ BAPB</a>
                                 @endif
-                            </div>
+                            
+@endif
+</div>
                         </td>
                     </tr>
                 @empty

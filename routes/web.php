@@ -20,11 +20,20 @@ use App\Http\Controllers\SchoolProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\LpjReviewController;
 
+Route::middleware('guest')->group(function () {
+    Route::get('/pengaturan-awal', [\App\Http\Controllers\SetupController::class, 'create'])->name('setup.create');
+    Route::post('/pengaturan-awal', [\App\Http\Controllers\SetupController::class, 'store'])->middleware('throttle:6,1')->name('setup.store');
+});
+
 Route::get('/', function () {
     return view('welcome');
 });
 
 Route::middleware(['auth', 'active'])->group(function () {
+    Route::delete('/dokumen/{kind}/{id}', [\App\Http\Controllers\DocumentDeletionController::class, 'destroy'])
+        ->whereIn('kind', ['kwitansi', 'nota-pesanan', 'bapb'])
+        ->whereNumber('id')->middleware('role:admin,bendahara')->name('documents.destroy');
+
     Route::get('/dashboard', [DashboardController::class, 'index'])->name(
         'dashboard',
     );
@@ -127,6 +136,11 @@ Route::middleware(['auth', 'active'])->group(function () {
                 UserManagementController::class,
                 'index',
             ])->name('users.index');
+            Route::get('/users/create', [UserManagementController::class, 'create'])->name('users.create');
+            Route::post('/users', [UserManagementController::class, 'store'])->name('users.store');
+            Route::get('/users/{user}/edit', [UserManagementController::class, 'edit'])->name('users.edit');
+            Route::patch('/users/{user}', [UserManagementController::class, 'update'])->name('users.update');
+            Route::put('/users/{user}/password', [UserManagementController::class, 'resetPassword'])->middleware('throttle:6,1')->name('users.password');
             Route::get('/users/{user}', [
                 UserManagementController::class,
                 'show',

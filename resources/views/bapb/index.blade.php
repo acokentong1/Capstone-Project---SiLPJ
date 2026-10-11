@@ -8,6 +8,7 @@
 </head>
 <body>
 @include('partials.app-navigation')
+@include('documents._delete-errors')
 <header class="header"><div class="header-inner"><div class="brand"><h1>BAPB</h1><p>Berita Acara Pemeriksaan Barang/Jasa untuk mendokumentasikan hasil pemeriksaan transaksi.</p></div><div class="actions"><a href="{{ route('belanja.index') }}" class="btn btn-secondary">Data Belanja</a><a href="{{ route('dashboard') }}" class="btn btn-secondary">Dashboard</a></div></div></header>
 <main class="container">
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
@@ -42,10 +43,18 @@
                 <td class="center">{{ $bapbs->firstItem()+$loop->index }}</td><td class="strong nowrap">{{ $bapb->nomor_bapb }}</td><td class="nowrap">{{ optional($bapb->tanggal_bapb)->translatedFormat('d M Y') }}</td>
                 <td><div class="strong">{{ $bapb->belanja->uraian ?? '-' }}</div><div class="muted">Bukti: {{ $bapb->belanja->nomor_bukti ?? '-' }}</div></td>
                 <td><span class="badge badge-blue">{{ $bapb->belanja->kategori ?? '-' }}</span></td><td><span class="badge {{ $badge }}">{{ $bapb->hasil_pemeriksaan }}</span></td><td class="right nowrap">Rp {{ number_format($bapb->belanja->total ?? 0,0,',','.') }}</td>
-                <td><div class="row-actions"><a class="action-link done" href="{{ route('bapb.show',$bapb->id) }}">Lihat / Cetak</a>
+                <td><div class="row-actions">
+@if($bapb->belanja && !$bapb->belanja->isEditable())
+    @include('documents._locked-action', ['lockedBelanjaId'=>$bapb->belanja_id])
+@else
+<a class="action-link done" href="{{ route('bapb.show',$bapb->id) }}">Lihat / Cetak</a>
+@include('documents._delete-action', ['document'=>$bapb, 'documentKind'=>'bapb', 'documentLabel'=>'BAPB'])
+
                     @if($bapb->belanja?->notaPesanan)<a class="action-link done" href="{{ route('nota-pesanan.show',$bapb->belanja->notaPesanan->id) }}">Nota ✓</a>@else<a class="action-link create" href="{{ route('nota-pesanan.create',$bapb->belanja_id) }}">+ Nota</a>@endif
                     @if($bapb->belanja?->kwitansi)<a class="action-link done" href="{{ route('kwitansi.show',$bapb->belanja->kwitansi->id) }}">Kwitansi ✓</a>@else<a class="action-link create" href="{{ route('kwitansi.create',$bapb->belanja_id) }}">+ Kwitansi</a>@endif
-                </div></td>
+                
+@endif
+</div></td>
             </tr>
         @empty<tr><td colspan="8" class="empty-state"><div class="empty-title">Belum ada BAPB</div>Buat BAPB dari halaman Data Belanja.</td></tr>@endforelse
         </tbody></table></div>

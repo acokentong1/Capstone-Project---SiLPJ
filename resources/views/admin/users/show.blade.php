@@ -10,7 +10,9 @@
 <body>
 @include('partials.app-navigation')
 <main class="page">
-    <div class="head"><div><h1>Detail Akun</h1><p>Ringkasan akun, sekolah, transaksi, dan aktivitas terakhir.</p></div><a class="btn" href="{{ route('admin.users.index') }}">← Kembali ke Manajemen User</a></div>
+    <div class="head"><div><h1>Detail Akun</h1>
+<a class="btn" href="{{ route('admin.users.edit', $user) }}">Ubah Identitas / Reset Kata Sandi</a>
+<a class="btn" href="{{ route('admin.users.create') }}">+ Tambah Akun Lain</a><p>Ringkasan akun, sekolah, transaksi, dan aktivitas terakhir.</p></div><a class="btn" href="{{ route('admin.users.index') }}">← Kembali ke Manajemen User</a></div>
     @if(session('success'))<p role="status">{{ session('success') }}</p>@endif
     @if(session('error'))<p role="alert">{{ session('error') }}</p>@endif
     @if($errors->any())<ul role="alert">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>@endif

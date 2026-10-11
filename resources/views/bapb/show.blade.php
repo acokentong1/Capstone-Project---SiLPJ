@@ -8,6 +8,7 @@
 </head>
 <body>
 @include('partials.app-navigation')
+@include('documents._delete-errors')
 @php
     $belanja = $bapb->belanja;
     $objek = strtolower($belanja->kategori ?? 'barang/jasa');
@@ -26,7 +27,9 @@
         <span class="doc-link active">BAPB ✓</span>
     </nav>
 
-    <article class="paper">
+    
+@include('documents._delete-action', ['document'=>$bapb, 'documentKind'=>'bapb', 'documentLabel'=>'BAPB'])
+<article class="paper">
         <header class="letterhead">
             <h1>{{ $school->nama_sekolah ?? 'NAMA SEKOLAH' }}</h1>
             <p>NPSN: {{ $school->npsn ?? '-' }}</p>

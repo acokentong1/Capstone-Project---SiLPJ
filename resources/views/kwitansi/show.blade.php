@@ -8,6 +8,7 @@
 </head>
 <body>
 @include('partials.app-navigation')
+@include('documents._delete-errors')
 @php $belanja = $kwitansi->belanja; @endphp
 <div class="screen-wrap">
     @if(session('success'))<div class="flash no-print">{{ session('success') }}</div>@endif
@@ -22,7 +23,9 @@
         @if($belanja->bapb)<a class="doc-link done" href="{{ route('bapb.show',$belanja->bapb->id) }}">BAPB ✓</a>@else<a class="doc-link missing" href="{{ route('bapb.create',$belanja->id) }}">+ Buat BAPB</a>@endif
     </nav>
 
-    <article class="paper">
+    
+@include('documents._delete-action', ['document'=>$kwitansi, 'documentKind'=>'kwitansi', 'documentLabel'=>'Kwitansi'])
+<article class="paper">
         <header class="letterhead">
             <h1>{{ $school->nama_sekolah ?? 'NAMA SEKOLAH' }}</h1>
             <p>NPSN: {{ $school->npsn ?? '-' }} &nbsp; | &nbsp; {{ $school->alamat ?? '-' }}</p>
