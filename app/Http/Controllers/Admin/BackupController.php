@@ -33,9 +33,15 @@ class BackupController extends Controller
         return view('admin.backups.index', compact('counts', 'safetyBackups'));
     }
 
-    public function download(Request $request, EncryptedBackupService $backupService): Response
-    {
-        $backup = $backupService->createEncryptedPayload();
+    public function download(
+        Request $request,
+        EncryptedBackupService $backupService,
+    ): Response {
+        try {
+            $backup = $backupService->createEncryptedPayload();
+        } catch (RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
         $filename = 'SILPJ-backup-' . now()->format('Ymd-His') . '.silpjbackup';
 
         ActivityLogger::record(
@@ -47,7 +53,7 @@ class BackupController extends Controller
                 'filename' => $filename,
                 'bytes' => $backup['bytes'],
                 'record_counts' => $backup['counts'],
-            ]
+            ],
         );
 
         return response($backup['contents'], 200, [
@@ -59,28 +65,47 @@ class BackupController extends Controller
         ]);
     }
 
-    public function previewRestore(Request $request, EncryptedBackupService $backupService): RedirectResponse
-    {
-        $validated = $request->validate([
-            'backup_file' => ['required', 'file', 'max:51200'],
-        ], [
-            'backup_file.required' => 'Pilih file backup SILPJ terlebih dahulu.',
-            'backup_file.file' => 'File backup tidak valid.',
-            'backup_file.max' => 'Ukuran file backup maksimal 50 MB.',
-        ]);
+    public function previewRestore(
+        Request $request,
+        EncryptedBackupService $backupService,
+    ): RedirectResponse {
+        $validated = $request->validate(
+            [
+                'backup_file' => ['required', 'file', 'max:51200'],
+            ],
+            [
+                'backup_file.required' =>
+                    'Pilih file backup SILPJ terlebih dahulu.',
+                'backup_file.file' => 'File backup tidak valid.',
+                'backup_file.max' => 'Ukuran file backup maksimal 50 MB.',
+            ],
+        );
 
         $uploaded = $validated['backup_file'];
-        if (! str_ends_with(strtolower($uploaded->getClientOriginalName()), '.silpjbackup')) {
-            return back()->with('error', 'File harus menggunakan ekstensi .silpjbackup.')->withInput();
+        if (
+            !str_ends_with(
+                strtolower($uploaded->getClientOriginalName()),
+                '.silpjbackup',
+            )
+        ) {
+            return back()
+                ->with('error', 'File harus menggunakan ekstensi .silpjbackup.')
+                ->withInput();
         }
 
         $contents = file_get_contents($uploaded->getRealPath());
         if ($contents === false || trim($contents) === '') {
-            return back()->with('error', 'File backup kosong atau tidak dapat dibaca.');
+            return back()->with(
+                'error',
+                'File backup kosong atau tidak dapat dibaca.',
+            );
         }
 
         try {
-            $inspection = $backupService->inspectEncryptedContents($contents, (string) $request->user()->email);
+            $inspection = $backupService->inspectEncryptedContents(
+                $contents,
+                (string) $request->user()->email,
+            );
         } catch (RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
         }
@@ -88,17 +113,24 @@ class BackupController extends Controller
         $token = Str::random(48);
         $path = 'silpj/restore-pending/' . $token . '.silpjbackup';
 
-        if (! Storage::disk('local')->put($path, $contents)) {
-            return back()->with('error', 'File preview restore tidak dapat disimpan sementara.');
+        if (!Storage::disk('local')->put($path, $contents)) {
+            return back()->with(
+                'error',
+                'File preview restore tidak dapat disimpan sementara.',
+            );
         }
 
-        Cache::put($this->cacheKey($token), [
-            'user_id' => (int) $request->user()->id,
-            'path' => $path,
-            'original_name' => $uploaded->getClientOriginalName(),
-            'preview' => $inspection['preview'],
-            'created_at' => now()->toIso8601String(),
-        ], now()->addMinutes(self::PENDING_TTL_MINUTES));
+        Cache::put(
+            $this->cacheKey($token),
+            [
+                'user_id' => (int) $request->user()->id,
+                'path' => $path,
+                'original_name' => $uploaded->getClientOriginalName(),
+                'preview' => $inspection['preview'],
+                'created_at' => now()->toIso8601String(),
+            ],
+            now()->addMinutes(self::PENDING_TTL_MINUTES),
+        );
 
         ActivityLogger::record(
             (int) $request->user()->id,
@@ -108,18 +140,24 @@ class BackupController extends Controller
             [
                 'filename' => $uploaded->getClientOriginalName(),
                 'record_counts' => $inspection['preview']['counts'],
-            ]
+            ],
         );
 
         return redirect()->route('admin.backups.restore.show', $token);
     }
 
-    public function showRestore(Request $request, string $token): View|RedirectResponse
-    {
+    public function showRestore(
+        Request $request,
+        string $token,
+    ): View|RedirectResponse {
         $pending = $this->pendingRestore($request, $token);
-        if (! $pending) {
-            return redirect()->route('admin.backups.index')
-                ->with('error', 'Preview restore sudah kedaluwarsa atau tidak ditemukan. Unggah ulang file backup.');
+        if (!$pending) {
+            return redirect()
+                ->route('admin.backups.index')
+                ->with(
+                    'error',
+                    'Preview restore sudah kedaluwarsa atau tidak ditemukan. Unggah ulang file backup.',
+                );
         }
 
         return view('admin.backups.restore-preview', [
@@ -131,38 +169,57 @@ class BackupController extends Controller
     public function executeRestore(
         Request $request,
         string $token,
-        EncryptedBackupService $backupService
+        EncryptedBackupService $backupService,
     ): RedirectResponse {
-        $request->validate([
-            'current_password' => ['required', 'current_password'],
-            'confirmation' => ['required', 'in:RESTORE SILPJ'],
-            'understand_logout' => ['accepted'],
-        ], [
-            'current_password.current_password' => 'Kata sandi admin tidak sesuai.',
-            'confirmation.in' => 'Ketik persis RESTORE SILPJ untuk melanjutkan.',
-            'understand_logout.accepted' => 'Konfirmasi bahwa seluruh sesi akan dikeluarkan setelah restore.',
-        ]);
+        $request->validate(
+            [
+                'current_password' => ['required', 'current_password'],
+                'confirmation' => ['required', 'in:RESTORE SILPJ'],
+                'understand_logout' => ['accepted'],
+            ],
+            [
+                'current_password.current_password' =>
+                    'Kata sandi admin tidak sesuai.',
+                'confirmation.in' =>
+                    'Ketik persis RESTORE SILPJ untuk melanjutkan.',
+                'understand_logout.accepted' =>
+                    'Konfirmasi bahwa seluruh sesi akan dikeluarkan setelah restore.',
+            ],
+        );
 
         $pending = $this->pendingRestore($request, $token);
-        if (! $pending) {
-            return redirect()->route('admin.backups.index')
-                ->with('error', 'Preview restore sudah kedaluwarsa. Unggah ulang file backup.');
+        if (!$pending) {
+            return redirect()
+                ->route('admin.backups.index')
+                ->with(
+                    'error',
+                    'Preview restore sudah kedaluwarsa. Unggah ulang file backup.',
+                );
         }
 
         $contents = Storage::disk('local')->get($pending['path']);
-        if (! is_string($contents) || trim($contents) === '') {
-            return redirect()->route('admin.backups.index')
-                ->with('error', 'File restore sementara tidak dapat dibaca. Unggah ulang backup.');
+        if (!is_string($contents) || trim($contents) === '') {
+            return redirect()
+                ->route('admin.backups.index')
+                ->with(
+                    'error',
+                    'File restore sementara tidak dapat dibaca. Unggah ulang backup.',
+                );
         }
 
         $actor = $request->user();
         $safetyBackup = null;
 
         try {
-            $inspection = $backupService->inspectEncryptedContents($contents, (string) $actor->email);
+            $inspection = $backupService->inspectEncryptedContents(
+                $contents,
+                (string) $actor->email,
+            );
 
-            if (! ($inspection['preview']['current_admin_found'] ?? false)) {
-                throw new RuntimeException('Restore dibatalkan karena akun admin yang sedang digunakan tidak ada di dalam backup.');
+            if (!($inspection['preview']['current_admin_found'] ?? false)) {
+                throw new RuntimeException(
+                    'Restore dibatalkan karena akun admin yang sedang digunakan tidak ada di dalam backup.',
+                );
             }
 
             $safetyBackup = $backupService->storeSafetyBackup();
@@ -171,7 +228,8 @@ class BackupController extends Controller
                 'admin_email' => $actor->email,
                 'backup_file' => $pending['original_name'],
                 'safety_backup' => $safetyBackup['filename'],
-                'backup_created_at' => $inspection['preview']['created_at'] ?? null,
+                'backup_created_at' =>
+                    $inspection['preview']['created_at'] ?? null,
             ]);
 
             $backupService->restorePayload($inspection['payload'], $actor);
@@ -183,9 +241,14 @@ class BackupController extends Controller
                 'error' => $exception->getMessage(),
             ]);
 
-            $message = 'Restore gagal dan perubahan database dibatalkan: ' . $exception->getMessage();
+            $message =
+                'Restore gagal dan perubahan database dibatalkan: ' .
+                $exception->getMessage();
             if ($safetyBackup) {
-                $message .= ' Backup pengaman tersimpan sebagai ' . $safetyBackup['filename'] . '.';
+                $message .=
+                    ' Backup pengaman tersimpan sebagai ' .
+                    $safetyBackup['filename'] .
+                    '.';
             }
 
             return back()->with('error', $message);
@@ -204,14 +267,18 @@ class BackupController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login')->with(
-            'status',
-            'Restore database berhasil. Demi keamanan semua sesi telah dikeluarkan. Silakan login kembali. Password admin yang menjalankan restore tetap menggunakan password sebelum restore.'
-        );
+        return redirect()
+            ->route('login')
+            ->with(
+                'status',
+                'Restore database berhasil. Demi keamanan semua sesi telah dikeluarkan. Silakan login kembali. Password admin yang menjalankan restore tetap menggunakan password sebelum restore.',
+            );
     }
 
-    public function cancelRestore(Request $request, string $token): RedirectResponse
-    {
+    public function cancelRestore(
+        Request $request,
+        string $token,
+    ): RedirectResponse {
         $pending = $this->pendingRestore($request, $token);
 
         if ($pending) {
@@ -219,20 +286,30 @@ class BackupController extends Controller
             Cache::forget($this->cacheKey($token));
         }
 
-        return redirect()->route('admin.backups.index')->with('success', 'Preview restore dibatalkan. Database tidak berubah.');
+        return redirect()
+            ->route('admin.backups.index')
+            ->with(
+                'success',
+                'Preview restore dibatalkan. Database tidak berubah.',
+            );
     }
 
     public function downloadSafetyBackup(
         Request $request,
-        string $filename
+        string $filename,
     ): StreamedResponse|RedirectResponse {
-        if (basename($filename) !== $filename || ! preg_match('/^[A-Za-z0-9._-]+\.silpjbackup$/', $filename)) {
+        if (
+            basename($filename) !== $filename ||
+            !preg_match('/^[A-Za-z0-9._-]+\.silpjbackup$/', $filename)
+        ) {
             abort(404);
         }
 
         $path = 'silpj/safety-backups/' . $filename;
-        if (! Storage::disk('local')->exists($path)) {
-            return redirect()->route('admin.backups.index')->with('error', 'Backup pengaman tidak ditemukan.');
+        if (!Storage::disk('local')->exists($path)) {
+            return redirect()
+                ->route('admin.backups.index')
+                ->with('error', 'Backup pengaman tidak ditemukan.');
         }
 
         ActivityLogger::record(
@@ -240,7 +317,7 @@ class BackupController extends Controller
             'backup',
             'Mengunduh backup pengaman sebelum restore',
             null,
-            ['filename' => $filename]
+            ['filename' => $filename],
         );
 
         return Storage::disk('local')->download($path, $filename, [
@@ -251,16 +328,22 @@ class BackupController extends Controller
 
     private function pendingRestore(Request $request, string $token): ?array
     {
-        if (! preg_match('/^[A-Za-z0-9]{48}$/', $token)) {
+        if (!preg_match('/^[A-Za-z0-9]{48}$/', $token)) {
             return null;
         }
 
         $pending = Cache::get($this->cacheKey($token));
-        if (! is_array($pending) || (int) ($pending['user_id'] ?? 0) !== (int) $request->user()->id) {
+        if (
+            !is_array($pending) ||
+            (int) ($pending['user_id'] ?? 0) !== (int) $request->user()->id
+        ) {
             return null;
         }
 
-        if (! isset($pending['path']) || ! Storage::disk('local')->exists($pending['path'])) {
+        if (
+            !isset($pending['path']) ||
+            !Storage::disk('local')->exists($pending['path'])
+        ) {
             Cache::forget($this->cacheKey($token));
             return null;
         }

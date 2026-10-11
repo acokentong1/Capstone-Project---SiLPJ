@@ -15,8 +15,8 @@ class DataSecurityTest extends TestCase
 
     public function test_user_cannot_create_kwitansi_for_another_users_belanja(): void
     {
-        $owner = User::factory()->create();
-        $attacker = User::factory()->create();
+        $owner = $this->schoolUser();
+        $attacker = $this->schoolUser();
         $belanja = $this->createBelanja($owner, 150000);
 
         $response = $this->actingAs($attacker)->post(route('kwitansi.store'), [
@@ -33,8 +33,8 @@ class DataSecurityTest extends TestCase
 
     public function test_user_cannot_create_nota_for_another_users_belanja(): void
     {
-        $owner = User::factory()->create();
-        $attacker = User::factory()->create();
+        $owner = $this->schoolUser();
+        $attacker = $this->schoolUser();
         $belanja = $this->createBelanja($owner, 120000);
 
         $this->actingAs($attacker)
@@ -46,22 +46,24 @@ class DataSecurityTest extends TestCase
 
     public function test_user_cannot_create_bapb_for_another_users_belanja(): void
     {
-        $owner = User::factory()->create();
-        $attacker = User::factory()->create();
+        $owner = $this->schoolUser();
+        $attacker = $this->schoolUser();
         $belanja = $this->createBelanja($owner, 130000);
 
-        $this->actingAs($attacker)->post(route('bapb.store'), [
-            'belanja_id' => $belanja->id,
-            'tanggal_bapb' => '2026-10-04',
-            'hasil_pemeriksaan' => 'Baik dan sesuai',
-        ])->assertNotFound();
+        $this->actingAs($attacker)
+            ->post(route('bapb.store'), [
+                'belanja_id' => $belanja->id,
+                'tanggal_bapb' => '2026-10-04',
+                'hasil_pemeriksaan' => 'Baik dan sesuai',
+            ])
+            ->assertNotFound();
 
         $this->assertDatabaseCount('bapbs', 0);
     }
 
     public function test_kwitansi_amount_and_number_are_generated_from_server_data(): void
     {
-        $user = User::factory()->create();
+        $user = $this->schoolUser();
         $belanja = $this->createBelanja($user, 275000);
         $this->createSchoolProfile($user);
 
@@ -76,14 +78,20 @@ class DataSecurityTest extends TestCase
         $kwitansi = Kwitansi::firstOrFail();
 
         $response->assertRedirect(route('kwitansi.show', $kwitansi->id));
-        $this->assertSame('KW-' . str_pad((string) $belanja->id, 3, '0', STR_PAD_LEFT), $kwitansi->nomor_kwitansi);
+        $this->assertSame(
+            'KW-' . str_pad((string) $belanja->id, 3, '0', STR_PAD_LEFT),
+            $kwitansi->nomor_kwitansi,
+        );
         $this->assertSame('275000.00', $kwitansi->jumlah_uang);
-        $this->assertSame('dua ratus tujuh puluh lima ribu', $kwitansi->terbilang);
+        $this->assertSame(
+            'dua ratus tujuh puluh lima ribu',
+            $kwitansi->terbilang,
+        );
     }
 
     public function test_database_prevents_two_kwitansi_for_the_same_belanja(): void
     {
-        $user = User::factory()->create();
+        $user = $this->schoolUser();
         $belanja = $this->createBelanja($user, 100000);
 
         Kwitansi::create([
@@ -107,64 +115,61 @@ class DataSecurityTest extends TestCase
         ]);
     }
 
-    public function test_one_user_can_only_have_one_school_profile(): void
+    public function test_two_accounts_can_share_one_school(): void
     {
-        $user = User::factory()->create();
-
-        SchoolProfile::create([
-            'user_id' => $user->id,
-            'nama_sekolah' => 'Sekolah A',
+        $user = $this->schoolUser();
+        $colleague = User::factory()->create([
+            'school_profile_id' => $user->school_profile_id,
         ]);
-
-        $this->expectException(\Illuminate\Database\QueryException::class);
-
-        SchoolProfile::create([
-            'user_id' => $user->id,
-            'nama_sekolah' => 'Sekolah B',
-        ]);
+        $this->assertSame(
+            $user->schoolProfile->id,
+            $colleague->schoolProfile->id,
+        );
     }
 
     public function test_user_cannot_edit_another_users_school_profile(): void
     {
-        $owner = User::factory()->create();
-        $otherUser = User::factory()->create();
+        $owner = $this->schoolUser();
+        $otherUser = $this->schoolUser();
 
-        $school = SchoolProfile::create([
-            'user_id' => $owner->id,
-            'nama_sekolah' => 'Sekolah Pemilik',
-        ]);
+        $school = $owner->schoolProfile;
 
-        $response = $this->actingAs($otherUser)
-            ->get(route('school-profile.edit', $school));
+        $response = $this->actingAs($otherUser)->get(
+            route('school-profile.edit', $school),
+        );
 
         $response->assertForbidden();
     }
 
     public function test_user_cannot_edit_another_users_belanja(): void
     {
-        $owner = User::factory()->create();
-        $otherUser = User::factory()->create();
+        $owner = $this->schoolUser();
+        $otherUser = $this->schoolUser();
         $belanja = $this->createBelanja($owner, 100000);
 
-        $response = $this->actingAs($otherUser)
-            ->get(route('belanja.edit', $belanja));
+        $response = $this->actingAs($otherUser)->get(
+            route('belanja.edit', $belanja),
+        );
 
-        $response->assertForbidden();
+        $response->assertNotFound();
     }
 
     public function test_belanja_total_is_calculated_on_the_server(): void
     {
-        $user = User::factory()->create();
+        $user = $this->schoolUser();
 
-        $this->actingAs($user)->post(route('belanja.store'), [
-            'tanggal' => '2026-10-04',
-            'nomor_bukti' => 'BKT-001',
-            'uraian' => 'ATK',
-            'kategori' => 'Barang',
-            'jumlah' => 3,
-            'harga_satuan' => 25000,
-            'total' => 1,
-        ])->assertRedirect(route('belanja.index'));
+        $this->actingAs($user)
+            ->post(route('belanja.store'), [
+                'tahun_anggaran' => 2026,
+                'tanggal' => '2026-10-04',
+                'nomor_bukti' => 'BKT-001',
+                'uraian' => 'ATK',
+                'kategori' => 'Barang',
+                'jumlah' => 3,
+                'harga_satuan' => 25000,
+                'total' => 1,
+            ])
+            ->assertRedirect(route('belanja.index'));
 
         $this->assertDatabaseHas('belanjas', [
             'user_id' => $user->id,
@@ -176,11 +181,12 @@ class DataSecurityTest extends TestCase
 
     public function test_invalid_belanja_category_is_rejected(): void
     {
-        $user = User::factory()->create();
+        $user = $this->schoolUser();
 
         $response = $this->actingAs($user)
             ->from(route('belanja.create'))
             ->post(route('belanja.store'), [
+                'tahun_anggaran' => 2026,
                 'tanggal' => '2026-10-04',
                 'nomor_bukti' => 'BKT-002',
                 'uraian' => 'Input tidak valid',
@@ -194,18 +200,33 @@ class DataSecurityTest extends TestCase
         $this->assertDatabaseCount('belanjas', 0);
     }
 
+    private function schoolUser(): User
+    {
+        $school = SchoolProfile::create(['nama_sekolah' => 'Sekolah Uji']);
+        $user = User::factory()->create([
+            'school_profile_id' => $school->id,
+            'role' => 'bendahara',
+        ]);
+        \App\Models\Anggaran::create([
+            'user_id' => $user->id,
+            'school_profile_id' => $school->id,
+            'tahun' => 2026,
+            'jumlah' => 10000000,
+        ]);
+        return $user;
+    }
+
     private function createSchoolProfile(User $user): SchoolProfile
     {
-        return SchoolProfile::create([
-            'user_id' => $user->id,
-            'nama_sekolah' => 'Sekolah Pengujian',
-        ]);
+        return $user->schoolProfile;
     }
 
     private function createBelanja(User $user, int $total): Belanja
     {
         return Belanja::create([
             'user_id' => $user->id,
+            'school_profile_id' => $user->school_profile_id,
+            'tahun_anggaran' => 2026,
             'tanggal' => '2026-10-04',
             'nomor_bukti' => 'BKT-' . $user->id . '-' . $total,
             'uraian' => 'Belanja pengujian',

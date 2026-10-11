@@ -30,11 +30,24 @@ class UserManagementController extends Controller
             $query->where(function ($sub) use ($q): void {
                 $sub->where('name', 'like', "%{$q}%")
                     ->orWhere('email', 'like', "%{$q}%")
-                    ->orWhereHas('schoolProfile', fn ($school) => $school->where('nama_sekolah', 'like', "%{$q}%"));
+                    ->orWhereHas(
+                        'schoolProfile',
+                        fn($school) => $school->where(
+                            'nama_sekolah',
+                            'like',
+                            "%{$q}%",
+                        ),
+                    );
             });
         }
 
-        if (in_array($filters['role'], ['admin', 'user'], true)) {
+        if (
+            in_array(
+                $filters['role'],
+                ['admin', 'bendahara', 'kepala_sekolah', 'user'],
+                true,
+            )
+        ) {
             $query->where('role', $filters['role']);
         }
 
@@ -57,52 +70,121 @@ class UserManagementController extends Controller
     public function show(User $user): View
     {
         $user->load('schoolProfile');
+        $schools = \App\Models\SchoolProfile::orderBy('nama_sekolah')->get();
 
         $totalBelanja = $user->belanjas()->sum('total');
         $jumlahBelanja = $user->belanjas()->count();
-        $lpjLengkap = $user->belanjas()
+        $lpjLengkap = $user
+            ->belanjas()
             ->whereHas('notaPesanan')
             ->whereHas('kwitansi')
             ->whereHas('bapb')
             ->count();
 
-        $lastLogin = $user->activityLogs()
+        $lastLogin = $user
+            ->activityLogs()
             ->where('action', 'login')
             ->latest('created_at')
             ->first();
 
-        $recentActivities = $user->activityLogs()
+        $recentActivities = $user
+            ->activityLogs()
             ->latest('created_at')
             ->limit(10)
             ->get();
 
-        return view('admin.users.show', compact(
-            'user',
-            'totalBelanja',
-            'jumlahBelanja',
-            'lpjLengkap',
-            'lastLogin',
-            'recentActivities'
-        ));
+        return view(
+            'admin.users.show',
+            compact(
+                'user',
+                'totalBelanja',
+                'jumlahBelanja',
+                'lpjLengkap',
+                'lastLogin',
+                'schools',
+                'recentActivities',
+            ),
+        );
+    }
+
+    public function updateSchool(Request $request, User $user): RedirectResponse
+    {
+        $data = $request->validate([
+            'school_profile_id' => [
+                'required',
+                'integer',
+                'exists:school_profiles,id',
+            ],
+            'reason' => ['required', 'string', 'min:5', 'max:2000'],
+        ]);
+        DB::transaction(function () use ($request, $user, $data) {
+            $target = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if (
+                (int) $target->school_profile_id ===
+                (int) $data['school_profile_id']
+            ) {
+                return;
+            }
+            // A reassignment never silently moves financial records to another school.
+            if (
+                $target->belanjas()->exists() ||
+                \App\Models\Anggaran::where('user_id', $target->id)->exists() ||
+                \App\Models\NotaPesanan::where(
+                    'user_id',
+                    $target->id,
+                )->exists() ||
+                \App\Models\Bapb::where('user_id', $target->id)->exists() ||
+                \App\Models\LpjEvent::where('actor_id', $target->id)->exists()
+            ) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'school_profile_id' =>
+                        'Akun sudah memiliki riwayat keuangan. Gunakan akun baru untuk penugasan sekolah lain; data lama tetap dipertahankan.',
+                ]);
+            }
+            $before = $target->school_profile_id;
+            $target->school_profile_id = $data['school_profile_id'];
+            $target->save();
+            ActivityLogger::record(
+                (int) $request->user()->id,
+                'admin',
+                'Mengubah penugasan sekolah akun ' . $target->email,
+                $target,
+                [
+                    'before' => $before,
+                    'after' => $target->school_profile_id,
+                    'reason' => $data['reason'],
+                ],
+            );
+        });
+        return back()->with(
+            'success',
+            'Penugasan sekolah berhasil diperbarui.',
+        );
     }
 
     public function updateRole(Request $request, User $user): RedirectResponse
     {
         $validated = $request->validate([
-            'role' => ['required', 'in:admin,user'],
+            'role' => ['required', 'in:admin,bendahara,kepala_sekolah,user'],
         ]);
 
         $actor = $request->user();
         $newRole = $validated['role'];
 
         if ($actor->is($user) && $newRole !== 'admin') {
-            return back()->with('error', 'Anda tidak dapat menurunkan role admin milik akun sendiri.');
+            return back()->with(
+                'error',
+                'Anda tidak dapat menurunkan role admin milik akun sendiri.',
+            );
         }
 
         if ($user->isAdmin() && $newRole !== 'admin') {
             $adminCount = User::where('role', 'admin')->count();
             if ($adminCount <= 1) {
-                return back()->with('error', 'Role admin terakhir tidak dapat diturunkan.');
+                return back()->with(
+                    'error',
+                    'Role admin terakhir tidak dapat diturunkan.',
+                );
             }
         }
 
@@ -112,7 +194,12 @@ class UserManagementController extends Controller
 
         $oldRole = $user->role;
 
-        DB::transaction(function () use ($user, $newRole, $actor, $oldRole): void {
+        DB::transaction(function () use (
+            $user,
+            $newRole,
+            $actor,
+            $oldRole,
+        ): void {
             User::withoutEvents(function () use ($user, $newRole): void {
                 $user->forceFill(['role' => $newRole])->save();
             });
@@ -126,7 +213,7 @@ class UserManagementController extends Controller
                     'target_user_id' => $user->id,
                     'old_role' => $oldRole,
                     'new_role' => $newRole,
-                ]
+                ],
             );
         });
 
@@ -142,14 +229,22 @@ class UserManagementController extends Controller
         $actor = $request->user();
         $newStatus = (bool) $validated['is_active'];
 
-        if ($actor->is($user) && ! $newStatus) {
-            return back()->with('error', 'Anda tidak dapat menonaktifkan akun yang sedang digunakan.');
+        if ($actor->is($user) && !$newStatus) {
+            return back()->with(
+                'error',
+                'Anda tidak dapat menonaktifkan akun yang sedang digunakan.',
+            );
         }
 
-        if ($user->isAdmin() && ! $newStatus) {
-            $activeAdminCount = User::where('role', 'admin')->where('is_active', true)->count();
+        if ($user->isAdmin() && !$newStatus) {
+            $activeAdminCount = User::where('role', 'admin')
+                ->where('is_active', true)
+                ->count();
             if ($activeAdminCount <= 1) {
-                return back()->with('error', 'Admin aktif terakhir tidak dapat dinonaktifkan.');
+                return back()->with(
+                    'error',
+                    'Admin aktif terakhir tidak dapat dinonaktifkan.',
+                );
             }
         }
 
@@ -162,22 +257,28 @@ class UserManagementController extends Controller
                 $user->forceFill(['is_active' => $newStatus])->save();
             });
 
-            if (! $newStatus) {
+            if (!$newStatus) {
                 DB::table('sessions')->where('user_id', $user->id)->delete();
             }
 
             ActivityLogger::record(
                 (int) $actor->id,
                 'admin',
-                ($newStatus ? 'Mengaktifkan' : 'Menonaktifkan') . " akun {$user->email}",
+                ($newStatus ? 'Mengaktifkan' : 'Menonaktifkan') .
+                    " akun {$user->email}",
                 $user,
                 [
                     'target_user_id' => $user->id,
                     'is_active' => $newStatus,
-                ]
+                ],
             );
         });
 
-        return back()->with('success', $newStatus ? 'Akun berhasil diaktifkan.' : 'Akun berhasil dinonaktifkan.');
+        return back()->with(
+            'success',
+            $newStatus
+                ? 'Akun berhasil diaktifkan.'
+                : 'Akun berhasil dinonaktifkan.',
+        );
     }
 }

@@ -50,4 +50,27 @@ class Belanja extends Model
     {
         return $this->hasOne(Bapb::class);
     }
+    protected $attributes = ['review_status' => 'draf'];
+
+    public function isEditable(): bool
+    {
+        return in_array($this->review_status, ['draf', 'revisi'], true);
+    }
+    public function reviewLabel(): string
+    {
+        return [
+            'draf' => 'Draf',
+            'diajukan' => 'Diajukan',
+            'revisi' => 'Perlu revisi',
+            'disetujui' => 'Disetujui',
+        ][$this->review_status] ?? 'Tidak diketahui';
+    }
+    public function attachments()
+    {
+        return $this->hasMany(LpjAttachment::class);
+    }
+    public function reviewEvents()
+    {
+        return $this->hasMany(LpjEvent::class);
+    }
 }

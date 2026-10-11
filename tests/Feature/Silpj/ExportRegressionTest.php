@@ -155,7 +155,7 @@ class ExportRegressionTest extends TestCase
 
     public function test_profile_creation_links_user_to_new_schema(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'bendahara']);
         $this->actingAs($user)
             ->post(route('school-profile.store'), [
                 'nama_sekolah' => 'Sekolah Baru',
@@ -202,7 +202,7 @@ class ExportRegressionTest extends TestCase
         ]);
         $service = app(\App\Services\EncryptedBackupService::class);
         $payload = $service->createPayloadArray();
-        $this->assertSame(3, $payload['format_version']);
+        $this->assertSame(4, $payload['format_version']);
         $this->assertCount(1, $payload['tables']['anggarans']);
         $service->restorePayload($payload, $user);
         $this->assertDatabaseHas('anggarans', [

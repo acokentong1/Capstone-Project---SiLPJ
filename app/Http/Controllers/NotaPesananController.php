@@ -7,6 +7,7 @@ use App\Models\NotaPesanan;
 use App\Models\SchoolProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
+use App\Services\LpjWorkflow;
 use Illuminate\Support\Facades\DB;
 
 class NotaPesananController extends Controller
@@ -87,6 +88,8 @@ class NotaPesananController extends Controller
             auth()->user()->school_profile_id ?? 0,
         )->findOrFail($id);
 
+        LpjWorkflow::assertEditable($belanja);
+
         $notaAda = NotaPesanan::where('belanja_id', $belanja->id)
             ->whereHas(
                 'belanja',
@@ -135,6 +138,7 @@ class NotaPesananController extends Controller
             )
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
+            LpjWorkflow::assertEditable($belanja);
 
             if (!auth()->user()->schoolProfile()->exists()) {
                 return redirect()

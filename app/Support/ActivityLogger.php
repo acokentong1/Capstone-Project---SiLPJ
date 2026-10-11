@@ -21,9 +21,9 @@ class ActivityLogger
         string $action,
         string $description,
         ?Model $subject = null,
-        array $metadata = []
+        array $metadata = [],
     ): void {
-        if (! self::tableReady()) {
+        if (!self::tableReady()) {
             return;
         }
 
@@ -36,7 +36,9 @@ class ActivityLogger
             'subject_id' => $subject?->getKey(),
             'description' => $description,
             'ip_address' => $request?->ip(),
-            'user_agent' => $request ? substr((string) $request->userAgent(), 0, 500) : null,
+            'user_agent' => $request
+                ? substr((string) $request->userAgent(), 0, 500)
+                : null,
             'metadata' => $metadata === [] ? null : $metadata,
         ]);
     }
@@ -50,7 +52,7 @@ class ActivityLogger
 
         $userId = self::resolveUserId($model);
 
-        if (! $userId) {
+        if (!$userId) {
             return;
         }
 
@@ -58,11 +60,32 @@ class ActivityLogger
         $metadata = [];
 
         if ($event === 'updated') {
-            $excluded = ['updated_at', 'password', 'remember_token', 'email_verified_at'];
-            $changes = array_values(array_diff(array_keys($model->getChanges()), $excluded));
+            $excluded = [
+                'updated_at',
+                'password',
+                'remember_token',
+                'email_verified_at',
+            ];
+            $changes = array_values(
+                array_diff(array_keys($model->getChanges()), $excluded),
+            );
 
             if ($changes !== []) {
                 $metadata['changed_fields'] = $changes;
+                if (
+                    $model instanceof Belanja ||
+                    $model instanceof Kwitansi ||
+                    $model instanceof SchoolProfile
+                ) {
+                    $metadata['before'] = array_intersect_key(
+                        $model->getRawOriginal(),
+                        array_flip($changes),
+                    );
+                    $metadata['after'] = array_intersect_key(
+                        $model->getAttributes(),
+                        array_flip($changes),
+                    );
+                }
             }
         }
 
@@ -79,10 +102,15 @@ class ActivityLogger
             return (int) $model->user_id;
         }
 
+        if ($model instanceof SchoolProfile) {
+            return auth()->id() ? (int) auth()->id() : null;
+        }
         if ($model instanceof Kwitansi) {
             $userId = $model->relationLoaded('belanja')
                 ? $model->belanja?->user_id
-                : Belanja::query()->whereKey($model->belanja_id)->value('user_id');
+                : Belanja::query()
+                    ->whereKey($model->belanja_id)
+                    ->value('user_id');
 
             return $userId ? (int) $userId : null;
         }
@@ -90,8 +118,10 @@ class ActivityLogger
         return null;
     }
 
-    private static function describeModelEvent(Model $model, string $event): array
-    {
+    private static function describeModelEvent(
+        Model $model,
+        string $event,
+    ): array {
         $verb = match ($event) {
             'created' => 'Menambahkan',
             'updated' => 'Memperbarui',
@@ -100,29 +130,59 @@ class ActivityLogger
         };
 
         if ($model instanceof Belanja) {
-            return [$event === 'created' ? 'create' : ($event === 'updated' ? 'update' : 'delete'),
-                "{$verb} transaksi belanja: {$model->uraian}"];
+            return [
+                $event === 'created'
+                    ? 'create'
+                    : ($event === 'updated'
+                        ? 'update'
+                        : 'delete'),
+                "{$verb} transaksi belanja: {$model->uraian}",
+            ];
         }
 
         if ($model instanceof NotaPesanan) {
-            return [$event === 'created' ? 'create' : ($event === 'updated' ? 'update' : 'delete'),
-                "{$verb} Nota Pesanan {$model->nomor_nota}"];
+            return [
+                $event === 'created'
+                    ? 'create'
+                    : ($event === 'updated'
+                        ? 'update'
+                        : 'delete'),
+                "{$verb} Nota Pesanan {$model->nomor_nota}",
+            ];
         }
 
         if ($model instanceof Kwitansi) {
-            return [$event === 'created' ? 'create' : ($event === 'updated' ? 'update' : 'delete'),
-                "{$verb} Kwitansi {$model->nomor_kwitansi}"];
+            return [
+                $event === 'created'
+                    ? 'create'
+                    : ($event === 'updated'
+                        ? 'update'
+                        : 'delete'),
+                "{$verb} Kwitansi {$model->nomor_kwitansi}",
+            ];
         }
 
         if ($model instanceof Bapb) {
-            return [$event === 'created' ? 'create' : ($event === 'updated' ? 'update' : 'delete'),
-                "{$verb} BAPB {$model->nomor_bapb}"];
+            return [
+                $event === 'created'
+                    ? 'create'
+                    : ($event === 'updated'
+                        ? 'update'
+                        : 'delete'),
+                "{$verb} BAPB {$model->nomor_bapb}",
+            ];
         }
 
         if ($model instanceof SchoolProfile) {
             $name = $model->nama_sekolah ?: 'sekolah';
-            return [$event === 'created' ? 'create' : ($event === 'updated' ? 'update' : 'delete'),
-                "{$verb} profil sekolah: {$name}"];
+            return [
+                $event === 'created'
+                    ? 'create'
+                    : ($event === 'updated'
+                        ? 'update'
+                        : 'delete'),
+                "{$verb} profil sekolah: {$name}",
+            ];
         }
 
         if ($model instanceof User) {
@@ -133,7 +193,14 @@ class ActivityLogger
                 default => "{$verb} akun SILPJ",
             };
 
-            return [$event === 'created' ? 'create' : ($event === 'updated' ? 'update' : 'delete'), $description];
+            return [
+                $event === 'created'
+                    ? 'create'
+                    : ($event === 'updated'
+                        ? 'update'
+                        : 'delete'),
+                $description,
+            ];
         }
 
         return [$event, "{$verb} data " . class_basename($model)];

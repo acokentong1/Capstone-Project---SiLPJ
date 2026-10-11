@@ -158,7 +158,7 @@ class LaporanLpjController extends Controller
                     'Nota Pesanan',
                     'Kwitansi',
                     'BAPB',
-                    'Status LPJ',
+                    'Dokumen | Pemeriksaan',
                 ]);
 
                 foreach ($belanjas as $index => $item) {
@@ -182,7 +182,7 @@ class LaporanLpjController extends Controller
                         $item->notaPesanan ? 'Ada' : 'Belum',
                         $item->kwitansi ? 'Ada' : 'Belum',
                         $item->bapb ? 'Ada' : 'Belum',
-                        $status,
+                        $status . ' | ' . $item->reviewLabel(),
                     ]);
                 }
 
@@ -263,7 +263,7 @@ class LaporanLpjController extends Controller
                     'I' => 16,
                     'J' => 16,
                     'K' => 13,
-                    'L' => 24,
+                    'L' => 38,
                 ]
                 as $column => $width
             ) {
@@ -451,7 +451,7 @@ class LaporanLpjController extends Controller
                 'Nota Pesanan',
                 'Kwitansi',
                 'BAPB',
-                'Status LPJ',
+                'Dokumen | Pemeriksaan',
             ];
             foreach ($headers as $index => $heading) {
                 $sheet->setCellValue(chr(65 + $index) . $headerRow, $heading);
@@ -513,7 +513,10 @@ class LaporanLpjController extends Controller
                     $item->kwitansi ? 'Ada' : 'Belum',
                 );
                 $sheet->setCellValue("K{$row}", $item->bapb ? 'Ada' : 'Belum');
-                $sheet->setCellValue("L{$row}", $status);
+                $sheet->setCellValue(
+                    "L{$row}",
+                    $status . ' | ' . $item->reviewLabel(),
+                );
 
                 $sheet
                     ->getStyle("B{$row}")
@@ -540,6 +543,10 @@ class LaporanLpjController extends Controller
                     ->getFont()
                     ->getColor()
                     ->setRGB($jumlahDokumen === 3 ? '15803D' : 'B45309');
+                $sheet
+                    ->getStyle("L{$row}")
+                    ->getAlignment()
+                    ->setWrapText(true);
                 $row++;
             }
 

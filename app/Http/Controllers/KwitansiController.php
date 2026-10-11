@@ -7,6 +7,7 @@ use App\Models\Kwitansi;
 use App\Models\SchoolProfile;
 use App\Support\Terbilang;
 use Illuminate\Http\Request;
+use App\Services\LpjWorkflow;
 use Illuminate\Support\Facades\DB;
 
 class KwitansiController extends Controller
@@ -17,6 +18,8 @@ class KwitansiController extends Controller
             'school_profile_id',
             auth()->user()->school_profile_id ?? 0,
         )->findOrFail($id);
+
+        LpjWorkflow::assertEditable($belanja);
 
         $kwitansiAda = Kwitansi::where('belanja_id', $belanja->id)->first();
 
@@ -58,6 +61,7 @@ class KwitansiController extends Controller
             )
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
+            LpjWorkflow::assertEditable($belanja);
 
             if (!auth()->user()->schoolProfile()->exists()) {
                 return redirect()

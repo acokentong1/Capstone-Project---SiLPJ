@@ -16,8 +16,8 @@ use Throwable;
 class EncryptedBackupService
 {
     private const FORMAT = 'SILPJ_ENCRYPTED_BACKUP';
-    private const FORMAT_VERSION = 3;
-    private const SUPPORTED_VERSIONS = [3];
+    private const FORMAT_VERSION = 4;
+    private const SUPPORTED_VERSIONS = [3, 4];
 
     /**
      * Tabel inti SILPJ yang aman untuk dibawa ke backup aplikasi.
@@ -32,9 +32,13 @@ class EncryptedBackupService
         'kwitansis',
         'bapbs',
         'activity_logs',
+        'lpj_attachments',
+        'lpj_events',
     ];
 
     private const DELETE_ORDER = [
+        'lpj_events',
+        'lpj_attachments',
         'activity_logs',
         'bapbs',
         'kwitansis',
@@ -46,6 +50,24 @@ class EncryptedBackupService
     ];
 
     private const REQUIRED_COLUMNS = [
+        'lpj_attachments' => [
+            'id',
+            'belanja_id',
+            'uploaded_by',
+            'filename',
+            'mime_type',
+            'size',
+            'sha256',
+            'contents_base64',
+        ],
+        'lpj_events' => [
+            'id',
+            'belanja_id',
+            'school_profile_id',
+            'actor_id',
+            'actor_name',
+            'action',
+        ],
         'users' => ['id', 'name', 'email', 'password', 'school_profile_id'],
         'school_profiles' => ['id', 'nama_sekolah'],
         'anggarans' => [
@@ -100,6 +122,11 @@ class EncryptedBackupService
                 JSON_THROW_ON_ERROR,
         );
         $encrypted = Crypt::encryptString($json);
+        if (strlen($encrypted) > 50 * 1024 * 1024) {
+            throw new RuntimeException(
+                'Backup melebihi batas pemulihan 50 MB. Gunakan ekspor database lengkap melalui administrator database; lampiran tersimpan di tabel lpj_attachments.',
+            );
+        }
 
         return [
             'contents' => $encrypted,
@@ -110,6 +137,11 @@ class EncryptedBackupService
     }
 
     public function createPayloadArray(): array
+    {
+        return DB::transaction(fn() => $this->collectPayloadArray());
+    }
+
+    private function collectPayloadArray(): array
     {
         $tables = [];
         $counts = [];
@@ -187,6 +219,7 @@ class EncryptedBackupService
             throw new RuntimeException('Struktur backup SILPJ tidak valid.');
         }
 
+        $payload = $this->upgradeWorkflowPayload($payload);
         $this->validatePayload($payload);
 
         $counts = [];
@@ -297,6 +330,7 @@ class EncryptedBackupService
 
     public function restorePayload(array $payload, User $actor): array
     {
+        $payload = $this->upgradeWorkflowPayload($payload);
         $this->validatePayload($payload);
 
         $actorEmail = (string) $actor->email;
@@ -383,7 +417,7 @@ class EncryptedBackupService
         $version = (int) ($payload['format_version'] ?? 1);
         if (!in_array($version, self::SUPPORTED_VERSIONS, true)) {
             throw new RuntimeException(
-                "Backup versi {$version} tidak sesuai struktur sekolah saat ini. Gunakan backup versi 3; backup lama perlu dikonversi dan diuji terpisah.",
+                "Backup versi {$version} tidak sesuai struktur sekolah saat ini. Gunakan backup versi 3 atau 4; backup lama perlu dikonversi dan diuji terpisah.",
             );
         }
 
@@ -467,6 +501,32 @@ class EncryptedBackupService
         $this->validateRelations($payload['tables']);
     }
 
+    private function upgradeWorkflowPayload(array $payload): array
+    {
+        // v3 precedes review/evidence. Preserve its records and initialize them as drafts.
+        if (
+            ($payload['format'] ?? null) === self::FORMAT &&
+            ($payload['format_version'] ?? null) === 3 &&
+            isset($payload['tables']) &&
+            is_array($payload['tables'])
+        ) {
+            $payload['tables']['lpj_attachments'] = [];
+            $payload['tables']['lpj_events'] = [];
+            foreach ($payload['tables']['belanjas'] ?? [] as $index => $row) {
+                if (is_array($row)) {
+                    $payload['tables']['belanjas'][$index] = array_merge($row, [
+                        'review_status' => 'draf',
+                        'submitted_by' => null,
+                        'submitted_at' => null,
+                        'approved_by' => null,
+                        'approved_at' => null,
+                    ]);
+                }
+            }
+        }
+        return $payload;
+    }
+
     private function validateRelations(array $tables): void
     {
         $userIds = $this->uniqueIds($tables['users'], 'users');
@@ -480,6 +540,112 @@ class EncryptedBackupService
         $this->uniqueIds($tables['kwitansis'], 'kwitansis');
         $this->uniqueIds($tables['bapbs'], 'bapbs');
         $this->uniqueIds($tables['activity_logs'], 'activity_logs');
+
+        $this->uniqueIds($tables['lpj_attachments'], 'lpj_attachments');
+        $this->uniqueIds($tables['lpj_events'], 'lpj_events');
+        $belanjaSchoolMap = array_column(
+            $tables['belanjas'],
+            'school_profile_id',
+            'id',
+        );
+        foreach ($tables['belanjas'] as $row) {
+            if (
+                !in_array(
+                    $row['review_status'] ?? null,
+                    ['draf', 'diajukan', 'revisi', 'disetujui'],
+                    true,
+                )
+            ) {
+                throw new RuntimeException(
+                    'Status pemeriksaan LPJ pada backup tidak valid.',
+                );
+            }
+            foreach (['submitted_by', 'approved_by'] as $field) {
+                if (!empty($row[$field])) {
+                    $this->assertExists(
+                        $userIds,
+                        (string) $row[$field],
+                        'Akun pemeriksa/pengaju tidak ditemukan pada backup.',
+                    );
+                }
+            }
+        }
+        foreach ($tables['lpj_attachments'] as $row) {
+            $this->assertExists(
+                $belanjaIds,
+                (string) $row['belanja_id'],
+                'Lampiran mengacu ke transaksi yang tidak ada.',
+            );
+            if ($row['uploaded_by'] !== null) {
+                $this->assertExists(
+                    $userIds,
+                    (string) $row['uploaded_by'],
+                    'Pengunggah lampiran tidak ditemukan.',
+                );
+            }
+            if (
+                !is_string($row['contents_base64']) ||
+                strlen($row['contents_base64']) > 2800000
+            ) {
+                throw new RuntimeException(
+                    'Ukuran lampiran backup tidak valid.',
+                );
+            }
+            $bytes = base64_decode($row['contents_base64'], true);
+            if (
+                $bytes === false ||
+                strlen($bytes) !== (int) $row['size'] ||
+                strlen($bytes) > 2097152 ||
+                !is_string($row['sha256']) ||
+                !hash_equals($row['sha256'], hash('sha256', $bytes))
+            ) {
+                throw new RuntimeException(
+                    'Isi lampiran backup rusak atau checksum berbeda.',
+                );
+            }
+            if (
+                !in_array(
+                    $row['mime_type'],
+                    ['application/pdf', 'image/jpeg', 'image/png'],
+                    true,
+                ) ||
+                (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes) !==
+                    $row['mime_type']
+            ) {
+                throw new RuntimeException(
+                    'Jenis lampiran pada backup tidak diizinkan.',
+                );
+            }
+        }
+        foreach ($tables['lpj_events'] as $row) {
+            $this->assertExists(
+                $schoolIds,
+                (string) $row['school_profile_id'],
+                'Sekolah pada riwayat LPJ tidak ditemukan.',
+            );
+            if ($row['actor_id'] !== null) {
+                $this->assertExists(
+                    $userIds,
+                    (string) $row['actor_id'],
+                    'Aktor pada riwayat LPJ tidak ditemukan.',
+                );
+            }
+            if ($row['belanja_id'] !== null) {
+                $this->assertExists(
+                    $belanjaIds,
+                    (string) $row['belanja_id'],
+                    'Transaksi pada riwayat LPJ tidak ditemukan.',
+                );
+                if (
+                    (string) $belanjaSchoolMap[$row['belanja_id']] !==
+                    (string) $row['school_profile_id']
+                ) {
+                    throw new RuntimeException(
+                        'Sekolah pada riwayat LPJ tidak sesuai transaksi.',
+                    );
+                }
+            }
+        }
 
         $emails = [];
         foreach ($tables['users'] as $row) {

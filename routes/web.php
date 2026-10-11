@@ -18,6 +18,7 @@ use App\Http\Controllers\NotaPesananController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SchoolProfileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\LpjReviewController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -38,8 +39,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         'profile.destroy',
     );
 
+    Route::get('/belanja', [BelanjaController::class, 'index'])->name(
+        'belanja.index',
+    );
     Route::resource('belanja', BelanjaController::class)
-        ->except(['show'])
+        ->except(['show', 'index'])
         ->middleware('role:admin,bendahara');
 
     Route::get('/nota-pesanan', [NotaPesananController::class, 'index'])->name(
@@ -48,10 +52,12 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/nota-pesanan/create/{id}', [
         NotaPesananController::class,
         'create',
-    ])->name('nota-pesanan.create');
-    Route::post('/nota-pesanan', [NotaPesananController::class, 'store'])->name(
-        'nota-pesanan.store',
-    );
+    ])
+        ->name('nota-pesanan.create')
+        ->middleware('role:admin,bendahara');
+    Route::post('/nota-pesanan', [NotaPesananController::class, 'store'])
+        ->name('nota-pesanan.store')
+        ->middleware('role:admin,bendahara');
     Route::get('/nota-pesanan/{id}', [
         NotaPesananController::class,
         'show',
@@ -60,22 +66,23 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/kwitansi', [KwitansiController::class, 'index'])->name(
         'kwitansi.index',
     );
-    Route::get('/kwitansi/create/{id}', [
-        KwitansiController::class,
-        'create',
-    ])->name('kwitansi.create');
-    Route::post('/kwitansi', [KwitansiController::class, 'store'])->name(
-        'kwitansi.store',
-    );
+    Route::get('/kwitansi/create/{id}', [KwitansiController::class, 'create'])
+        ->name('kwitansi.create')
+        ->middleware('role:admin,bendahara');
+    Route::post('/kwitansi', [KwitansiController::class, 'store'])
+        ->name('kwitansi.store')
+        ->middleware('role:admin,bendahara');
     Route::get('/kwitansi/{id}', [KwitansiController::class, 'show'])->name(
         'kwitansi.show',
     );
 
     Route::get('/bapb', [BapbController::class, 'index'])->name('bapb.index');
-    Route::get('/bapb/create/{id}', [BapbController::class, 'create'])->name(
-        'bapb.create',
-    );
-    Route::post('/bapb', [BapbController::class, 'store'])->name('bapb.store');
+    Route::get('/bapb/create/{id}', [BapbController::class, 'create'])
+        ->name('bapb.create')
+        ->middleware('role:admin,bendahara');
+    Route::post('/bapb', [BapbController::class, 'store'])
+        ->name('bapb.store')
+        ->middleware('role:admin,bendahara');
     Route::get('/bapb/{id}', [BapbController::class, 'show'])->name(
         'bapb.show',
     );
@@ -88,13 +95,13 @@ Route::middleware(['auth', 'active'])->group(function () {
         'exportCsv',
     ])->name('laporan-lpj.export-csv');
 
-    Route::resource('school-profile', SchoolProfileController::class)->only([
+    Route::get('/school-profile', [
+        SchoolProfileController::class,
         'index',
-        'create',
-        'store',
-        'edit',
-        'update',
-    ]);
+    ])->name('school-profile.index');
+    Route::resource('school-profile', SchoolProfileController::class)
+        ->only(['create', 'store', 'edit', 'update'])
+        ->middleware('role:admin,bendahara');
 
     Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name(
         'activity-logs.index',
@@ -124,6 +131,10 @@ Route::middleware(['auth', 'active'])->group(function () {
                 UserManagementController::class,
                 'show',
             ])->name('users.show');
+            Route::patch('/users/{user}/school', [
+                UserManagementController::class,
+                'updateSchool',
+            ])->name('users.school');
             Route::patch('/users/{user}/role', [
                 UserManagementController::class,
                 'updateRole',
@@ -194,9 +205,46 @@ Route::middleware(['auth', 'active'])->group(function () {
         'pdf',
     ])->name('rekap.export.pdf');
 
+    Route::get('/anggaran', [AnggaranController::class, 'index'])->name(
+        'anggaran.index',
+    );
     Route::resource('anggaran', AnggaranController::class)
-        ->only(['index', 'create', 'store'])
+        ->only(['create', 'store'])
         ->middleware('role:admin,bendahara');
+
+    Route::get('/pemeriksaan-lpj', [LpjReviewController::class, 'index'])->name(
+        'lpj-review.index',
+    );
+    Route::get('/pemeriksaan-lpj/{id}', [LpjReviewController::class, 'show'])
+        ->whereNumber('id')
+        ->name('lpj-review.show');
+    Route::post('/pemeriksaan-lpj/{id}/status', [
+        LpjReviewController::class,
+        'transition',
+    ])
+        ->whereNumber('id')
+        ->middleware('role:admin,bendahara,kepala_sekolah')
+        ->name('lpj-review.transition');
+    Route::post('/pemeriksaan-lpj/{id}/lampiran', [
+        LpjReviewController::class,
+        'upload',
+    ])
+        ->whereNumber('id')
+        ->middleware('role:admin,bendahara')
+        ->name('lpj-review.upload');
+    Route::get('/lampiran-lpj/{attachment}', [
+        LpjReviewController::class,
+        'download',
+    ])
+        ->whereNumber('attachment')
+        ->name('lpj-review.download');
+    Route::delete('/pemeriksaan-lpj/{id}/lampiran/{attachment}', [
+        LpjReviewController::class,
+        'remove',
+    ])
+        ->whereNumber(['id', 'attachment'])
+        ->middleware('role:admin,bendahara')
+        ->name('lpj-review.remove');
 
     Route::get('/laporan-lpj/export-excel', [
         LaporanLpjController::class,

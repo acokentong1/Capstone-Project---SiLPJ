@@ -35,7 +35,10 @@ class ProfileController extends Controller
 
         $request->user()->save();
 
-        return Redirect::route('profile.edit')->with('status', 'profile-updated');
+        return Redirect::route('profile.edit')->with(
+            'status',
+            'profile-updated',
+        );
     }
 
     /**
@@ -50,11 +53,29 @@ class ProfileController extends Controller
         $user = $request->user();
 
         if ($user->isAdmin() && User::where('role', 'admin')->count() <= 1) {
-            return back()->withErrors([
-                'password' => 'Akun admin terakhir tidak dapat dihapus. Promosikan admin lain terlebih dahulu.',
-            ], 'userDeletion');
+            return back()->withErrors(
+                [
+                    'password' =>
+                        'Akun admin terakhir tidak dapat dihapus. Promosikan admin lain terlebih dahulu.',
+                ],
+                'userDeletion',
+            );
         }
 
+        if (
+            \App\Models\Belanja::where('user_id', $user->id)->exists() ||
+            \App\Models\Anggaran::where('user_id', $user->id)->exists() ||
+            \App\Models\NotaPesanan::where('user_id', $user->id)->exists() ||
+            \App\Models\Bapb::where('user_id', $user->id)->exists()
+        ) {
+            return back()->withErrors(
+                [
+                    'password' =>
+                        'Akun memiliki catatan keuangan. Minta admin menonaktifkan akun agar riwayat tetap tersimpan.',
+                ],
+                'userDeletion',
+            );
+        }
         Auth::logout();
 
         $user->delete();

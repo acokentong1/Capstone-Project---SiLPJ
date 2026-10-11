@@ -17,37 +17,27 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    new Chart(document.getElementById('chartBulanan'), {
-        type: 'bar',
-        data: {
-            labels: @json ($labelsBulan ?? []),
-            datasets: [
-                {
-                    label: 'Total Belanja',
-                    data: @json ($dataBulan ?? []),
-                },
-            ],
-        },
-    });
+new Chart(document.getElementById('chartBulanan'), {
+    type: 'bar',
+    data: {
+        labels: @json($labelsBulan ?? []),
+        datasets: [{
+            label: 'Total Belanja',
+            data: @json($dataBulan ?? [])
+        }]
+    }
+});
 
-    new Chart(document.getElementById('chartKategori'), {
-        type: 'doughnut',
-        data: {
-            labels: ['Barang', 'Jasa'],
-            datasets: [
-                {
-                    data: [
-                        {{
-                            $summary['barang'] ??
-                                0
-                        }},
-                        {{
-                            $summary['jasa'] ??
-                                0
-                        }},
-                    ],
-                },
-            ],
-        },
-    });
+new Chart(document.getElementById('chartKategori'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Barang','Jasa'],
+        datasets: [{
+            data: [
+                {{ $summary['barang'] ?? 0 }},
+                {{ $summary['jasa'] ?? 0 }}
+            ]
+        }]
+    }
+});
 </script>

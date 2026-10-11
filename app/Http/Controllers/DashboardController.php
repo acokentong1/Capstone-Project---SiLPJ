@@ -1,184 +1,78 @@
 <?php
-
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-
-use App\Models\Belanja;
 use App\Models\Anggaran;
-use App\Models\NotaPesanan;
-use App\Models\Kwitansi;
-use App\Models\Bapb;
-use App\Models\SchoolProfile;
+use App\Models\Belanja;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $user = Auth::user();
-
-        // tahun yang dipilih
-        $tahunDipilih = $request->tahun ?? now()->year;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Ambil data sekolah
-        |--------------------------------------------------------------------------
-        */
-
-        $school = null;
-
-        if ($user) {
-            // Ambil berdasarkan school_profile_id milik user
-            if ($user->school_profile_id ?? 0) {
-                $school = SchoolProfile::find($user->school_profile_id ?? 0);
-            }
-        }
-
-        $schoolId = $school ? $school->id : 0;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Data Belanja
-        |--------------------------------------------------------------------------
-        */
-
-        $belanjas = Belanja::where('school_profile_id', $schoolId)
-            ->latest()
-            ->get();
-
-        $totalBelanja = $belanjas->sum('total');
-
-        $jumlahTransaksi = $belanjas->count();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Status LPJ
-        |--------------------------------------------------------------------------
-        */
-
-        $jumlahLengkap = 0;
-        $jumlahBelumLengkap = 0;
-
-        foreach ($belanjas as $belanja) {
-            $lengkap =
-                NotaPesanan::where('belanja_id', $belanja->id)->exists() &&
-                Kwitansi::where('belanja_id', $belanja->id)->exists() &&
-                Bapb::where('belanja_id', $belanja->id)->exists();
-
-            if ($lengkap) {
-                $jumlahLengkap++;
-            } else {
-                $jumlahBelumLengkap++;
-            }
-        }
-
-        $transaksiTerbaru = $belanjas->take(5);
-
-        $jumlahNota = NotaPesanan::whereIn(
-            'belanja_id',
-            $belanjas->pluck('id'),
-        )->count();
-
-        $jumlahKwitansi = Kwitansi::whereIn(
-            'belanja_id',
-            $belanjas->pluck('id'),
-        )->count();
-
-        $jumlahBapb = Bapb::whereIn(
-            'belanja_id',
-            $belanjas->pluck('id'),
-        )->count();
-
-        $persentaseLengkap =
-            $jumlahTransaksi > 0
-                ? round(($jumlahLengkap / $jumlahTransaksi) * 100)
-                : 0;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Data Anggaran
-        |--------------------------------------------------------------------------
-        */
-
+        $request->validate([
+            'tahun' => ['nullable', 'integer', 'between:1900,9999'],
+        ]);
+        $school = $request->user()->schoolProfile;
+        $schoolId = $school?->id ?? 0;
         $anggarans = Anggaran::where('school_profile_id', $schoolId)
-            ->orderBy('tahun', 'desc')
+            ->orderByDesc('tahun')
             ->get();
-
         $tahunTersedia = $anggarans
             ->pluck('tahun')
+            ->merge(
+                Belanja::where('school_profile_id', $schoolId)
+                    ->whereNotNull('tahun_anggaran')
+                    ->distinct()
+                    ->pluck('tahun_anggaran'),
+            )
             ->unique()
             ->sortDesc()
             ->values();
-
-        // jika tahun yang dipilih belum ada,
-        // gunakan tahun pertama yang tersedia
-        if (!$tahunTersedia->contains($tahunDipilih)) {
-            $tahunDipilih = $tahunTersedia->first();
-        }
-
-        $anggaranAktif = Anggaran::where('school_profile_id', $schoolId)
-            ->where('tahun', $tahunDipilih)
-            ->first();
-
-        $paguAnggaran = $anggaranAktif->jumlah ?? 0;
-
-        $realisasiAnggaran = Belanja::where('school_profile_id', $schoolId)
+        $tahunDipilih = $request->filled('tahun')
+            ? (int) $request->tahun
+            : (int) ($tahunTersedia->contains(now()->year)
+                ? now()->year
+                : $tahunTersedia->first() ?? now()->year);
+        $tahunAnggaran = $tahunDipilih;
+        $anggaranAktif = $anggarans->firstWhere('tahun', $tahunDipilih);
+        $belanjas = Belanja::where('school_profile_id', $schoolId)
             ->where('tahun_anggaran', $tahunDipilih)
-            ->sum('total');
-
+            ->with(['notaPesanan', 'kwitansi', 'bapb'])
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id')
+            ->get();
+        $totalBelanja = $belanjas->sum('total');
+        $jumlahTransaksi = $belanjas->count();
+        $lengkap = $belanjas->filter(
+            fn($item) => $item->notaPesanan && $item->kwitansi && $item->bapb,
+        );
+        $jumlahLengkap = $lengkap->count();
+        $jumlahBelumLengkap = $jumlahTransaksi - $jumlahLengkap;
+        $transaksiTerbaru = $belanjas->take(5);
+        $jumlahNota = $belanjas
+            ->filter(fn($item) => $item->notaPesanan)
+            ->count();
+        $jumlahKwitansi = $belanjas
+            ->filter(fn($item) => $item->kwitansi)
+            ->count();
+        $jumlahBapb = $belanjas->filter(fn($item) => $item->bapb)->count();
+        $persentaseLengkap = $jumlahTransaksi
+            ? round(($jumlahLengkap / $jumlahTransaksi) * 100)
+            : 0;
+        $paguAnggaran = $anggaranAktif?->jumlah ?? 0;
+        $realisasiAnggaran = $totalBelanja;
         $sisaAnggaran = $paguAnggaran - $realisasiAnggaran;
-
         $serapanAnggaran =
             $paguAnggaran > 0
                 ? round(($realisasiAnggaran / $paguAnggaran) * 100)
                 : 0;
-
-        $tahunAnggaran = $tahunDipilih;
-
         $attentionSummary = [
             'belum_lengkap' => $jumlahBelumLengkap,
-
-            'nilai_belum_lengkap' => $belanjas
-                ->filter(function ($belanja) {
-                    $lengkap =
-                        NotaPesanan::where(
-                            'belanja_id',
-                            $belanja->id,
-                        )->exists() &&
-                        Kwitansi::where('belanja_id', $belanja->id)->exists() &&
-                        Bapb::where('belanja_id', $belanja->id)->exists();
-
-                    return !$lengkap;
-                })
-                ->sum('total'),
-
-            'nota_kurang' => $belanjas
-                ->filter(function ($belanja) {
-                    return !NotaPesanan::where(
-                        'belanja_id',
-                        $belanja->id,
-                    )->exists();
-                })
-                ->count(),
-
-            'kwitansi_kurang' => $belanjas
-                ->filter(function ($belanja) {
-                    return !Kwitansi::where(
-                        'belanja_id',
-                        $belanja->id,
-                    )->exists();
-                })
-                ->count(),
-
-            'bapb_kurang' => $belanjas
-                ->filter(function ($belanja) {
-                    return !Bapb::where('belanja_id', $belanja->id)->exists();
-                })
-                ->count(),
+            'nilai_belum_lengkap' => $totalBelanja - $lengkap->sum('total'),
+            'nota_kurang' => $jumlahTransaksi - $jumlahNota,
+            'kwitansi_kurang' => $jumlahTransaksi - $jumlahKwitansi,
+            'bapb_kurang' => $jumlahTransaksi - $jumlahBapb,
         ];
-
         return view(
             'dashboard',
             compact(

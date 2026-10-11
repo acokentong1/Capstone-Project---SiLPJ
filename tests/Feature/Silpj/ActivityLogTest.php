@@ -14,8 +14,9 @@ class ActivityLogTest extends TestCase
 
     public function test_guest_cannot_open_activity_log(): void
     {
-        $this->get(route('activity-logs.index'))
-            ->assertRedirect(route('login'));
+        $this->get(route('activity-logs.index'))->assertRedirect(
+            route('login'),
+        );
     }
 
     public function test_user_only_sees_their_own_activity(): void
@@ -72,7 +73,7 @@ class ActivityLogTest extends TestCase
                 ->where('user_id', $user->id)
                 ->where('action', 'create')
                 ->where('description', 'like', '%ATK untuk audit log%')
-                ->exists()
+                ->exists(),
         );
     }
 
@@ -82,6 +83,9 @@ class ActivityLogTest extends TestCase
 
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
         $response->assertHeader('X-Frame-Options', 'SAMEORIGIN');
-        $response->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $response->assertHeader(
+            'Referrer-Policy',
+            'strict-origin-when-cross-origin',
+        );
     }
 }

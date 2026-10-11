@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Data Belanja - SILPJ</title>
 
     <style>
@@ -454,16 +454,14 @@
     </style>
 </head>
 <body>
-    @include ('partials.app-navigation')
+@include('partials.app-navigation')
     <header class="header">
         <div class="header-inner">
             <div class="brand">
                 <h1>Data Belanja</h1>
                 <p>Kelola transaksi dan kelengkapan dokumen pertanggungjawaban.</p>
             </div>
-            <a href="{{ route('dashboard') }}" class="btn btn-secondary"
-                >← Dashboard</a
-            >
+            <a href="{{ route('dashboard') }}" class="btn btn-secondary">← Dashboard</a>
         </div>
     </header>
 
@@ -474,98 +472,40 @@
                 <p>Cari transaksi, pantau kelengkapan LPJ, lalu buka atau buat dokumen dari satu halaman.</p>
             </div>
             <div class="actions">
-                <a
-                    href="{{ route('laporan-lpj.index') }}"
-                    class="btn btn-secondary"
-                    >Laporan LPJ</a
-                >
-                @if (!in_array(auth()->user()->role, ['kepala_sekolah']))
-                    <a
-                        href="{{ route('belanja.create') }}"
-                        class="btn btn-primary"
-                        >+ Tambah Belanja</a
-                    >
-                @endif
+                <a href="{{ route('laporan-lpj.index') }}" class="btn btn-secondary">Laporan LPJ</a>
+                @if(auth()->user()->isBendahara())
+                        <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                    @endif
             </div>
         </div>
 
-        @if (session('success'))
-            <div class="alert alert-success">
-                <strong>✓</strong
-                ><span>{{
-                    session(
-                        'success',
-                    )
-                }}</span>
-            </div>
+        @if(session('success'))
+            <div class="alert alert-success"><strong>✓</strong><span>{{ session('success') }}</span></div>
         @endif
 
-        @if (session('error'))
-            <div class="alert alert-error">
-                <strong>!</strong
-                ><span>{{
-                    session(
-                        'error',
-                    )
-                }}</span>
-            </div>
+        @if(session('error'))
+            <div class="alert alert-error"><strong>!</strong><span>{{ session('error') }}</span></div>
         @endif
 
         <section class="stats-grid">
             <div class="stat-card">
                 <div class="stat-label">TOTAL TRANSAKSI</div>
-                <div class="stat-value">
-                    {{
-                        number_format(
-                            $totalTransaksi,
-                            0,
-                            ',',
-                            '.',
-                        )
-                    }}
-                </div>
+                <div class="stat-value">{{ number_format($totalTransaksi, 0, ',', '.') }}</div>
                 <div class="stat-note">Seluruh transaksi akun ini</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">TOTAL BELANJA</div>
-                <div class="stat-value">
-                    Rp {{
-                        number_format(
-                            $totalBelanja,
-                            0,
-                            ',',
-                            '.',
-                        )
-                    }}
-                </div>
+                <div class="stat-value">Rp {{ number_format($totalBelanja, 0, ',', '.') }}</div>
                 <div class="stat-note">Akumulasi seluruh transaksi</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">LPJ LENGKAP</div>
-                <div class="stat-value">
-                    {{
-                        number_format(
-                            $lpjLengkap,
-                            0,
-                            ',',
-                            '.',
-                        )
-                    }}
-                </div>
+                <div class="stat-value">{{ number_format($lpjLengkap, 0, ',', '.') }}</div>
                 <div class="stat-note">Nota, Kwitansi, dan BAPB tersedia</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">BELUM LENGKAP</div>
-                <div class="stat-value">
-                    {{
-                        number_format(
-                            $lpjBelumLengkap,
-                            0,
-                            ',',
-                            '.',
-                        )
-                    }}
-                </div>
+                <div class="stat-value">{{ number_format($lpjBelumLengkap, 0, ',', '.') }}</div>
                 <div class="stat-note">Masih membutuhkan dokumen LPJ</div>
             </div>
         </section>
@@ -574,61 +514,23 @@
             <div class="filter-top">
                 <div class="filter-title">Pencarian dan Filter</div>
                 <div class="filter-result">
-                    Ditemukan
-                    <strong>{{
-                        number_format(
-                            $belanjas->total(),
-                            0,
-                            ',',
-                            '.',
-                        )
-                    }}</strong>
-                    transaksi dengan nilai
-                    <strong
-                        >Rp {{
-                            number_format(
-                                $filteredTotal,
-                                0,
-                                ',',
-                                '.',
-                            )
-                        }}</strong
-                    >
+                    Ditemukan <strong>{{ number_format($belanjas->total(), 0, ',', '.') }}</strong> transaksi
+                    dengan nilai <strong>Rp {{ number_format($filteredTotal, 0, ',', '.') }}</strong>
                 </div>
             </div>
 
-            <form
-                method="GET"
-                action="{{ route('belanja.index') }}"
-                class="filter-grid"
-            >
+            <form method="GET" action="{{ route('belanja.index') }}" class="filter-grid">
                 <div class="field filter-search">
                     <label for="q">Cari transaksi</label>
-                    <input
-                        id="q"
-                        name="q"
-                        type="search"
-                        value="{{ $filters['q'] }}"
-                        placeholder="Nomor bukti atau uraian belanja"
-                    />
+                    <input id="q" name="q" type="search" value="{{ $filters['q'] }}" placeholder="Nomor bukti atau uraian belanja">
                 </div>
 
                 <div class="field">
                     <label for="kategori">Kategori</label>
                     <select id="kategori" name="kategori">
                         <option value="">Semua kategori</option>
-                        <option
-                            value="Barang"
-                            @selected ($filters['kategori'] === 'Barang')
-                        >
-                            Barang
-                        </option>
-                        <option
-                            value="Jasa"
-                            @selected ($filters['kategori'] === 'Jasa')
-                        >
-                            Jasa
-                        </option>
+                        <option value="Barang" @selected($filters['kategori'] === 'Barang')>Barang</option>
+                        <option value="Jasa" @selected($filters['kategori'] === 'Jasa')>Jasa</option>
                     </select>
                 </div>
 
@@ -636,24 +538,9 @@
                     <label for="status">Status LPJ</label>
                     <select id="status" name="status">
                         <option value="">Semua status</option>
-                        <option
-                            value="lengkap"
-                            @selected ($filters['status'] === 'lengkap')
-                        >
-                            Lengkap
-                        </option>
-                        <option
-                            value="proses"
-                            @selected ($filters['status'] === 'proses')
-                        >
-                            Dalam proses
-                        </option>
-                        <option
-                            value="belum"
-                            @selected ($filters['status'] === 'belum')
-                        >
-                            Belum ada dokumen
-                        </option>
+                        <option value="lengkap" @selected($filters['status'] === 'lengkap')>Lengkap</option>
+                        <option value="proses" @selected($filters['status'] === 'proses')>Dalam proses</option>
+                        <option value="belum" @selected($filters['status'] === 'belum')>Belum ada dokumen</option>
                     </select>
                 </div>
 
@@ -661,11 +548,8 @@
                     <label for="tahun">Tahun Anggaran</label>
                     <select id="tahun" name="tahun">
                         <option value="">Semua Tahun</option>
-                        @foreach ($tahunAnggaran ?? [] as $tahun)
-                            <option
-                                value="{{ $tahun }}"
-                                @selected (($filters['tahun'] ?? '') == $tahun)
-                            >
+                        @foreach($tahunAnggaran ?? [] as $tahun)
+                            <option value="{{ $tahun }}" @selected(($filters['tahun'] ?? '') == $tahun)>
                                 {{ $tahun }}
                             </option>
                         @endforeach
@@ -674,34 +558,18 @@
 
                 <div class="field">
                     <label for="tanggal_mulai">Dari tanggal</label>
-                    <input
-                        id="tanggal_mulai"
-                        name="tanggal_mulai"
-                        type="date"
-                        value="{{ $filters['tanggal_mulai'] }}"
-                    />
+                    <input id="tanggal_mulai" name="tanggal_mulai" type="date" value="{{ $filters['tanggal_mulai'] }}">
                 </div>
 
                 <div class="field">
                     <label for="tanggal_selesai">Sampai tanggal</label>
-                    <input
-                        id="tanggal_selesai"
-                        name="tanggal_selesai"
-                        type="date"
-                        value="{{ $filters['tanggal_selesai'] }}"
-                    />
+                    <input id="tanggal_selesai" name="tanggal_selesai" type="date" value="{{ $filters['tanggal_selesai'] }}">
                 </div>
 
                 <div class="filter-buttons">
-                    <button type="submit" class="btn btn-primary">
-                        Terapkan
-                    </button>
-                    @if ($hasFilters)
-                        <a
-                            href="{{ route('belanja.index') }}"
-                            class="btn btn-secondary"
-                            >Reset</a
-                        >
+                    <button type="submit" class="btn btn-primary">Terapkan</button>
+                    @if($hasFilters)
+                        <a href="{{ route('belanja.index') }}" class="btn btn-secondary">Reset</a>
                     @endif
                 </div>
             </form>
@@ -710,10 +578,10 @@
         <section class="table-card">
             <div class="table-meta">
                 <div>
-                    <strong>Daftar Belanja</strong><br />
+                    <strong>Daftar Belanja</strong><br>
                     <span>Urutan terbaru berdasarkan tanggal transaksi.</span>
                 </div>
-                @if ($hasFilters)
+                @if($hasFilters)
                     <span>Filter aktif</span>
                 @endif
             </div>
@@ -722,182 +590,94 @@
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 55px">No</th>
-                            <th style="width: 120px">Tanggal</th>
-                            <th style="width: 110px">No. Bukti</th>
+                            <th style="width:55px;">No</th>
+                            <th style="width:120px;">Tanggal</th>
+                            <th style="width:110px;">No. Bukti</th>
                             <th>Uraian</th>
-                            <th style="width: 95px">Kategori</th>
-                            <th style="width: 140px">Total</th>
-                            <th style="width: 145px">Status LPJ</th>
-                            <th style="min-width: 370px">Aksi</th>
+                            <th style="width:95px;">Kategori</th>
+                            <th style="width:140px;">Total</th>
+                            <th style="width:145px;">Status LPJ</th>
+                            <th style="min-width:370px;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($belanjas as $item)
+                        @forelse($belanjas as $item)
                             @php
-                                $docCount =
-                                    ($item->notaPesanan ? 1 : 0) +
-                                    ($item->kwitansi ? 1 : 0) +
-                                    ($item->bapb ? 1 : 0);
+                                $docCount = ($item->notaPesanan ? 1 : 0)
+                                    + ($item->kwitansi ? 1 : 0)
+                                    + ($item->bapb ? 1 : 0);
                                 $isComplete = $docCount === 3;
                                 $hasDocuments = $docCount > 0;
                             @endphp
 
                             <tr>
                                 <td class="center mobile-hide" data-label="No">
-                                    {{
-                                        $belanjas->firstItem() +
-                                            $loop->index
-                                    }}
+                                    {{ $belanjas->firstItem() + $loop->index }}
                                 </td>
                                 <td class="nowrap" data-label="Tanggal">
-                                    {{
-                                        \Carbon\Carbon::parse(
-                                            $item->tanggal,
-                                        )->translatedFormat('d M Y')
-                                    }}
+                                    {{ \Carbon\Carbon::parse($item->tanggal)->translatedFormat('d M Y') }}
                                 </td>
-                                <td data-label="No. Bukti">
-                                    {{ $item->nomor_bukti }}
-                                </td>
+                                <td data-label="No. Bukti">{{ $item->nomor_bukti }}</td>
                                 <td class="uraian" data-label="Uraian">
                                     {{ $item->uraian }}
-                                    <div
-                                        class="muted"
-                                        style="margin-top: 4px; font-size: 11px"
-                                    >
-                                        {{
-                                            number_format(
-                                                $item->jumlah,
-                                                0,
-                                                ',',
-                                                '.',
-                                            )
-                                        }} × Rp {{
-                                            number_format(
-                                                $item->harga_satuan,
-                                                0,
-                                                ',',
-                                                '.',
-                                            )
-                                        }}
+                                    <div class="muted" style="margin-top:4px; font-size:11px;">
+                                        {{ number_format($item->jumlah, 0, ',', '.') }} × Rp {{ number_format($item->harga_satuan, 0, ',', '.') }}
                                     </div>
                                 </td>
                                 <td data-label="Kategori">
-                                    <span
-                                        class="badge badge-blue"
-                                        >{{ $item->kategori }}</span
-                                    >
+                                    <span class="badge badge-blue">{{ $item->kategori }}</span>
                                 </td>
                                 <td class="right nowrap" data-label="Total">
-                                    <strong
-                                        >Rp {{
-                                            number_format(
-                                                $item->total,
-                                                0,
-                                                ',',
-                                                '.',
-                                            )
-                                        }}</strong
-                                    >
+                                    <strong>Rp {{ number_format($item->total, 0, ',', '.') }}</strong>
                                 </td>
-                                <td data-label="Status LPJ">
-                                    @if ($isComplete)
-                                        <span class="badge badge-success"
-                                            >✓ Lengkap</span
-                                        >
-                                    @elseif ($hasDocuments)
-                                        <span class="badge badge-warning"
-                                            >{{ $docCount }}/3 dokumen</span
-                                        >
+                                <td data-label="Status LPJ"><div style="margin-bottom:6px">{{ $item->reviewLabel() }}</div>
+                                    @if($isComplete)
+                                        <span class="badge badge-success">✓ Lengkap</span>
+                                    @elseif($hasDocuments)
+                                        <span class="badge badge-warning">{{ $docCount }}/3 dokumen</span>
                                     @else
-                                        <span class="badge badge-muted"
-                                            >Belum ada</span
-                                        >
+                                        <span class="badge badge-muted">Belum ada</span>
                                     @endif
-                                    <div
-                                        class="doc-progress"
-                                        aria-label="{{ $docCount }} dari 3 dokumen lengkap"
-                                    >
-                                        <span
-                                            class="doc-dot {{ $item->notaPesanan ? 'done' : '' }}"
-                                        ></span>
-                                        <span
-                                            class="doc-dot {{ $item->kwitansi ? 'done' : '' }}"
-                                        ></span>
-                                        <span
-                                            class="doc-dot {{ $item->bapb ? 'done' : '' }}"
-                                        ></span>
+                                    <div class="doc-progress" aria-label="{{ $docCount }} dari 3 dokumen lengkap">
+                                        <span class="doc-dot {{ $item->notaPesanan ? 'done' : '' }}"></span>
+                                        <span class="doc-dot {{ $item->kwitansi ? 'done' : '' }}"></span>
+                                        <span class="doc-dot {{ $item->bapb ? 'done' : '' }}"></span>
                                     </div>
                                 </td>
                                 <td data-label="Aksi">
                                     <div class="row-actions">
-                                        <a
-                                            href="{{ route('belanja.edit', $item->id) }}"
-                                            class="action-link edit"
-                                            >Edit</a
-                                        >
-
-                                        @if ($item->notaPesanan)
-                                            <a
-                                                href="{{ route('nota-pesanan.show', $item->notaPesanan->id) }}"
-                                                class="action-link done"
-                                                >Nota ✓</a
-                                            >
-                                        @else
-                                            <a
-                                                href="{{ route('nota-pesanan.create', $item->id) }}"
-                                                class="action-link"
-                                                >+ Nota</a
-                                            >
+                                        <a href="{{ route('lpj-review.show', $item->id) }}" class="action-link">Pemeriksaan</a>
+                                        @if(auth()->user()->isBendahara() && $item->isEditable())
+                                        <a href="{{ route('belanja.edit', $item->id) }}" class="action-link edit">Edit</a>
                                         @endif
 
-                                        @if ($item->kwitansi)
-                                            <a
-                                                href="{{ route('kwitansi.show', $item->kwitansi->id) }}"
-                                                class="action-link done"
-                                                >Kwitansi ✓</a
-                                            >
-                                        @else
-                                            <a
-                                                href="{{ route('kwitansi.create', $item->id) }}"
-                                                class="action-link purple"
-                                                >+ Kwitansi</a
-                                            >
+                                        @if($item->notaPesanan)
+                                            <a href="{{ route('nota-pesanan.show', $item->notaPesanan->id) }}" class="action-link done">Nota ✓</a>
+                                        @elseif(auth()->user()->isBendahara() && $item->isEditable())
+                                            <a href="{{ route('nota-pesanan.create', $item->id) }}" class="action-link">+ Nota</a>
                                         @endif
 
-                                        @if ($item->bapb)
-                                            <a
-                                                href="{{ route('bapb.show', $item->bapb->id) }}"
-                                                class="action-link done"
-                                                >BAPB ✓</a
-                                            >
-                                        @else
-                                            <a
-                                                href="{{ route('bapb.create', $item->id) }}"
-                                                class="action-link warning"
-                                                >+ BAPB</a
-                                            >
+                                        @if($item->kwitansi)
+                                            <a href="{{ route('kwitansi.show', $item->kwitansi->id) }}" class="action-link done">Kwitansi ✓</a>
+                                        @elseif(auth()->user()->isBendahara() && $item->isEditable())
+                                            <a href="{{ route('kwitansi.create', $item->id) }}" class="action-link purple">+ Kwitansi</a>
                                         @endif
 
-                                        @if ($hasDocuments)
-                                            <button
-                                                type="button"
-                                                class="action-link"
-                                                disabled
-                                                title="Hapus tidak tersedia karena transaksi sudah memiliki dokumen LPJ."
-                                            >
-                                                Hapus
-                                            </button>
+                                        @if($item->bapb)
+                                            <a href="{{ route('bapb.show', $item->bapb->id) }}" class="action-link done">BAPB ✓</a>
+                                        @elseif(auth()->user()->isBendahara() && $item->isEditable())
+                                            <a href="{{ route('bapb.create', $item->id) }}" class="action-link warning">+ BAPB</a>
+                                        @endif
+
+                                        @if(!auth()->user()->isBendahara() || !$item->isEditable() || $hasDocuments)
+                                            <button type="button" class="action-link" disabled title="Hapus tidak tersedia karena transaksi sudah memiliki dokumen LPJ.">Hapus</button>
                                         @else
                                             <button
                                                 type="button"
                                                 class="action-link delete js-delete"
                                                 data-action="{{ route('belanja.destroy', $item->id) }}"
                                                 data-uraian="{{ $item->uraian }}"
-                                            >
-                                                Hapus
-                                            </button>
+                                            >Hapus</button>
                                         @endif
                                     </div>
                                 </td>
@@ -906,28 +686,16 @@
                             <tr>
                                 <td colspan="8" class="empty-state">
                                     <div class="empty-title">
-                                        {{
-                                            $hasFilters
-                                                ? 'Tidak ada transaksi yang cocok.'
-                                                : 'Belum ada transaksi belanja.'
-                                        }}
+                                        {{ $hasFilters ? 'Tidak ada transaksi yang cocok.' : 'Belum ada transaksi belanja.' }}
                                     </div>
                                     <div>
-                                        {{
-                                            $hasFilters
-                                                ? 'Ubah atau reset filter untuk melihat data lain.'
-                                                : 'Tambahkan transaksi pertama untuk mulai menyusun LPJ.'
-                                        }}
+                                        {{ $hasFilters ? 'Ubah atau reset filter untuk melihat data lain.' : 'Tambahkan transaksi pertama untuk mulai menyusun LPJ.' }}
                                     </div>
-                                    @if (!$hasFilters)
-                                        <div style="margin-top: 14px">
-                                            @if (!in_array(auth()->user()->role, ['kepala_sekolah']))
-                                                <a
-                                                    href="{{ route('belanja.create') }}"
-                                                    class="btn btn-primary"
-                                                    >+ Tambah Belanja</a
-                                                >
-                                            @endif
+                                    @if(!$hasFilters)
+                                        <div style="margin-top:14px;">
+                                            @if(auth()->user()->isBendahara())
+                        <a href="{{ route('belanja.create') }}" class="btn btn-primary">+ Tambah Belanja</a>
+                    @endif
                                         </div>
                                     @endif
                                 </td>
@@ -937,33 +705,17 @@
                 </table>
             </div>
 
-            @if ($belanjas->hasPages())
+            @if($belanjas->hasPages())
                 <div class="pagination-wrap">
                     <div class="pagination-info">
                         Menampilkan {{ $belanjas->firstItem() }}–{{ $belanjas->lastItem() }} dari {{ $belanjas->total() }} transaksi
                     </div>
                     <nav class="pagination" aria-label="Navigasi halaman">
-                        <a
-                            class="page-link {{ $belanjas->onFirstPage() ? 'disabled' : '' }}"
-                            href="{{ $belanjas->previousPageUrl() ?? '#' }}"
-                            >‹</a
-                        >
-                        @foreach ($belanjas->getUrlRange(
-                                max(1, $belanjas->currentPage() - 2),
-                                min($belanjas->lastPage(), $belanjas->currentPage() + 2)
-                            )
-                            as $page => $url)
-                            <a
-                                class="page-link {{ $page === $belanjas->currentPage() ? 'active' : '' }}"
-                                href="{{ $url }}"
-                                >{{ $page }}</a
-                            >
+                        <a class="page-link {{ $belanjas->onFirstPage() ? 'disabled' : '' }}" href="{{ $belanjas->previousPageUrl() ?? '#' }}">‹</a>
+                        @foreach($belanjas->getUrlRange(max(1, $belanjas->currentPage() - 2), min($belanjas->lastPage(), $belanjas->currentPage() + 2)) as $page => $url)
+                            <a class="page-link {{ $page === $belanjas->currentPage() ? 'active' : '' }}" href="{{ $url }}">{{ $page }}</a>
                         @endforeach
-                        <a
-                            class="page-link {{ $belanjas->hasMorePages() ? '' : 'disabled' }}"
-                            href="{{ $belanjas->nextPageUrl() ?? '#' }}"
-                            >›</a
-                        >
+                        <a class="page-link {{ $belanjas->hasMorePages() ? '' : 'disabled' }}" href="{{ $belanjas->nextPageUrl() ?? '#' }}">›</a>
                     </nav>
                 </div>
             @endif
@@ -971,29 +723,16 @@
     </main>
 
     <div class="modal-backdrop" id="deleteModal" aria-hidden="true">
-        <div
-            class="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="deleteTitle"
-        >
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
             <h3 id="deleteTitle">Hapus transaksi?</h3>
             <p>Data yang belum memiliki dokumen LPJ dapat dihapus. Tindakan ini tidak dapat dibatalkan.</p>
             <div class="modal-item" id="deleteItem">-</div>
-            <form id="deleteForm" method="POST">
+            <form id="deleteForm" method="POST"><label for="delete-reason">Alasan penghapusan</label><input id="delete-reason" name="reason" required minlength="5" maxlength="2000" style="width:100%;padding:10px;margin:10px 0">
                 @csrf
-                @method ('DELETE')
+                @method('DELETE')
                 <div class="modal-actions">
-                    <button
-                        type="button"
-                        class="btn btn-secondary"
-                        id="cancelDelete"
-                    >
-                        Batal
-                    </button>
-                    <button type="submit" class="btn btn-danger">
-                        Ya, Hapus
-                    </button>
+                    <button type="button" class="btn btn-secondary" id="cancelDelete">Batal</button>
+                    <button type="submit" class="btn btn-danger">Ya, Hapus</button>
                 </div>
             </form>
         </div>
@@ -1008,8 +747,7 @@
         document.querySelectorAll('.js-delete').forEach((button) => {
             button.addEventListener('click', () => {
                 deleteForm.action = button.dataset.action;
-                deleteItem.textContent =
-                    button.dataset.uraian || 'Transaksi belanja';
+                deleteItem.textContent = button.dataset.uraian || 'Transaksi belanja';
                 modal.classList.add('show');
                 modal.setAttribute('aria-hidden', 'false');
             });

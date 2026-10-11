@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use App\Models\SchoolProfile;
 use App\Support\Terbilang;
+use App\Services\LpjWorkflow;
 
 class BelanjaController extends Controller
 {
@@ -78,7 +79,12 @@ class BelanjaController extends Controller
                 );
         }
 
-        $belanjas = $query->latest()->paginate(10)->withQueryString();
+        $belanjas = $query
+            ->with(['notaPesanan', 'kwitansi', 'bapb'])
+            ->latest('tanggal')
+            ->orderByDesc('id')
+            ->paginate(10)
+            ->withQueryString();
 
         // total transaksi seluruh data
         $totalTransaksi = (clone $query)->count();
@@ -274,6 +280,8 @@ class BelanjaController extends Controller
             $user->school_profile_id ?? 0,
         )->findOrFail($id);
 
+        LpjWorkflow::assertEditable($belanja);
+
         $tahunAnggaran = Anggaran::where(
             'school_profile_id',
             $user->school_profile_id ?? 0,
@@ -302,6 +310,7 @@ class BelanjaController extends Controller
                 'nomor_bukti' => 'required|string|max:255',
 
                 'uraian' => 'required|string|max:255',
+                'reason' => 'required|string|min:5|max:2000',
 
                 'kategori' => ['required', Rule::in(['Barang', 'Jasa'])],
 
@@ -313,7 +322,20 @@ class BelanjaController extends Controller
             $belanja = Belanja::where(
                 'school_profile_id',
                 $user->school_profile_id ?? 0,
-            )->findOrFail($id);
+            )
+                ->lockForUpdate()
+                ->findOrFail($id);
+            LpjWorkflow::assertEditable($belanja);
+            $before = $belanja->only([
+                'tanggal',
+                'tahun_anggaran',
+                'nomor_bukti',
+                'uraian',
+                'kategori',
+                'jumlah',
+                'harga_satuan',
+                'total',
+            ]);
 
             $anggaran = Anggaran::where(
                 'school_profile_id',
@@ -380,25 +402,60 @@ class BelanjaController extends Controller
                 ]);
             }
 
+            if ($nota = $belanja->notaPesanan) {
+                $nota->update(['tanggal_nota' => $belanja->tanggal]);
+            }
+            LpjWorkflow::record(
+                $belanja,
+                'ubah_belanja',
+                $validated['reason'],
+                [
+                    'before' => $before,
+                    'after' => $belanja->only(array_keys($before)),
+                ],
+            );
             return redirect()
                 ->route('belanja.index')
                 ->with('success', 'Data belanja berhasil diperbarui');
         });
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $user = Auth::user();
-
-        $belanja = Belanja::where(
-            'school_profile_id',
-            $user->school_profile_id ?? 0,
-        )->findOrFail($id);
-
-        $belanja->delete();
-
-        return redirect()
-            ->route('belanja.index')
-            ->with('success', 'Data belanja berhasil dihapus');
+        $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:2000'],
+        ]);
+        return DB::transaction(function () use ($request, $id) {
+            $belanja = Belanja::where(
+                'school_profile_id',
+                $request->user()->school_profile_id ?? 0,
+            )
+                ->lockForUpdate()
+                ->findOrFail($id);
+            LpjWorkflow::assertEditable($belanja);
+            if (
+                $belanja->notaPesanan()->exists() ||
+                $belanja->kwitansi()->exists() ||
+                $belanja->bapb()->exists()
+            ) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'lpj' =>
+                        'Transaksi yang memiliki dokumen LPJ tidak dapat dihapus.',
+                ]);
+            }
+            LpjWorkflow::record($belanja, 'hapus_belanja', $request->reason, [
+                'before' => $belanja->only([
+                    'nomor_bukti',
+                    'uraian',
+                    'total',
+                    'tanggal',
+                    'tahun_anggaran',
+                ]),
+            ]);
+            $belanja->delete();
+            return redirect()
+                ->route('belanja.index')
+                ->with('success', 'Data belanja berhasil dihapus.');
+        });
     }
 }

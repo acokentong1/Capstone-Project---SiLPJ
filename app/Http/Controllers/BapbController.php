@@ -7,6 +7,7 @@ use App\Models\Belanja;
 use App\Models\SchoolProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
+use App\Services\LpjWorkflow;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -104,6 +105,8 @@ class BapbController extends Controller
             auth()->user()->school_profile_id ?? 0,
         )->findOrFail($id);
 
+        LpjWorkflow::assertEditable($belanja);
+
         $bapbAda = Bapb::where('belanja_id', $belanja->id)
             ->whereHas(
                 'belanja',
@@ -159,6 +162,7 @@ class BapbController extends Controller
             )
                 ->lockForUpdate()
                 ->findOrFail($validated['belanja_id']);
+            LpjWorkflow::assertEditable($belanja);
 
             if (!auth()->user()->schoolProfile()->exists()) {
                 return redirect()
